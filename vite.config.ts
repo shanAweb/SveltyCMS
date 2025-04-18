@@ -15,11 +15,11 @@ import { execSync } from 'child_process';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import { paraglide } from '@inlang/paraglide-sveltekit/vite';
-
-// compile and cleanupOrphanedFiles will be imported dynamically later
-// import { compile, cleanupOrphanedFiles } from './src/routes/api/compile/compile';
+import { compile, cleanupOrphanedFiles } from './src/routes/api/compile/compile';
+import { generateContentTypes } from './src/content/vite';
 
 import tailwindcss from '@tailwindcss/vite';
+
 // Get package.json version info
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 
@@ -74,8 +74,6 @@ export default defineConfig({
 			name: 'collection-watcher',
 			async buildStart() {
 				try {
-					// Dynamically import compile here
-					const { compile } = await import('./src/routes/api/compile/compile');
 					await compile({ userCollections, compiledCollections });
 					console.log('\x1b[32mInitial compilation successful!\x1b[0m');
 				} catch (error) {
@@ -111,8 +109,7 @@ export default defineConfig({
 										lastUnlinkTime = currentTime;
 										console.log(`Collection file deleted: \x1b[31m${file}\x1b[0m`);
 
-										// Handle deletion - dynamically import cleanupOrphanedFiles
-										const { cleanupOrphanedFiles } = await import('./src/routes/api/compile/compile');
+										// Handle deletion
 										await cleanupOrphanedFiles(userCollections, compiledCollections);
 										console.log(`Cleanup completed for deleted file: \x1b[31m${file}\x1b[0m`);
 									} else if (event === 'add' || event === 'change') {
@@ -128,34 +125,71 @@ export default defineConfig({
 										// Track update time
 										lastUUIDUpdate[file] = currentTime;
 
-										// Compile - dynamically import compile
-										const { compile } = await import('./src/routes/api/compile/compile');
+										// Compile
 										await compile({ userCollections, compiledCollections });
 										console.log('Compilation successful!');
 
-										// Directly perform actions after compilation
-										try {
-											// Dynamically import necessary modules
-											const { isRedisEnabled, clearCache } = await import('./src/databases/redis');
-											const { contentManager } = await import('./src/content/ContentManager');
-											const { generateContentTypes } = await import('./src/content/vite');
+										// Trigger content-structure sync via API with retry logic
+										const maxRetries = 3;
+										let retryCount = 0;
+										const syncContentStructure = async () => {
+											try {
+												// Create a proper Node.js request object
+												const req = {
+													method: 'POST',
+													url: '/api/content-structure',
+													originalUrl: '/api/content-structure',
+													headers: {
+														'content-type': 'application/json'
+													},
+													body: JSON.stringify({
+														action: 'recompile'
+													}),
+													on: (event, callback) => {
+														if (event === 'data') {
+															callback(req.body);
+														}
+														if (event === 'end') {
+															callback();
+														}
+													}
+												};
 
-											// Clear Redis cache if enabled
-											if (isRedisEnabled()) { // Check if this function works correctly outside request context
-												await clearCache('api:content-structure:*');
-												console.log('Cleared content structure Redis cache.');
+												// Create a proper Node.js response object
+												const res = {
+													writeHead: () => { },
+													setHeader: () => { },
+													getHeader: () => { },
+													write: () => { },
+													end: () => { },
+													statusCode: 200
+												};
+
+												// Use the server's middleware to handle the request
+												await new Promise((resolve) => {
+													server.middlewares(req, res, () => resolve(undefined));
+												});
+
+												console.log('Content structure sync triggered successfully');
+											} catch (error) {
+												if (retryCount < maxRetries) {
+													retryCount++;
+													console.log(`Retrying content structure sync (attempt ${retryCount})...`);
+													await new Promise((resolve) => setTimeout(resolve, 500));
+													return syncContentStructure();
+												}
+												console.error('Failed to trigger content structure sync after retries:', error);
 											}
+										};
 
-											// Update content manager
-											await contentManager.updateCollections(true);
-											console.log('Content manager updated.');
+										await syncContentStructure();
 
-											// Update collection types
+										try {
+											// Call refactored function without server argument
 											await generateContentTypes();
 											console.log(`Collection types updated for: \x1b[32m${file}\x1b[0m`);
-
-										} catch (syncError) {
-											console.error('Error during post-compilation sync:', syncError);
+										} catch (error) {
+											console.error('Error updating collection types:', error);
 										}
 									}
 
@@ -168,7 +202,7 @@ export default defineConfig({
 								} catch (error) {
 									console.error(`Error processing collection file ${event}:`, error);
 								}
-							}, 50); // Debounce time
+							}, 50);
 						}
 
 						// Handle config file changes
