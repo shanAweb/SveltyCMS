@@ -8,24 +8,24 @@
  * compilation tasks, sets up environment variables, and defines alias paths for the project.
  */
 
-import Path from 'path';
+import path from 'path';
 import { resolve } from 'path';
 import { readFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import { paraglide } from '@inlang/paraglide-sveltekit/vite';
-import { compile, cleanupOrphanedFiles } from './src/routes/api/compile/compile';
-import { generateContentTypes } from './src/content/vite';
+
+// compile and cleanupOrphanedFiles will be imported dynamically later
+// import { compile, cleanupOrphanedFiles } from './src/routes/api/compile/compile';
 
 import tailwindcss from '@tailwindcss/vite';
-
 // Get package.json version info
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 
-// Config directories
-const userCollections = Path.posix.join(process.cwd(), 'config/collections');
-const compiledCollections = Path.posix.join(process.cwd(), 'compiledCollections');
+// Config directories - Use standard path.join
+const userCollections = path.join(process.cwd(), 'config/collections');
+const compiledCollections = path.join(process.cwd(), 'compiledCollections');
 const configDir = resolve(process.cwd(), 'config');
 const privateConfigPath = resolve(configDir, 'private.ts');
 const publicConfigPath = resolve(configDir, 'public.ts');
@@ -74,6 +74,8 @@ export default defineConfig({
 			name: 'collection-watcher',
 			async buildStart() {
 				try {
+					// Dynamically import compile here
+					const { compile } = await import('./src/routes/api/compile/compile');
 					await compile({ userCollections, compiledCollections });
 					console.log('\x1b[32mInitial compilation successful!\x1b[0m');
 				} catch (error) {
@@ -87,9 +89,16 @@ export default defineConfig({
 				const lastUUIDUpdate: { [key: string]: number } = {};
 
 				return () => {
+					// Helper to normalize paths for comparison
+					const normalizePath = (p: string) => p.replace(/\\/g, '/');
+
 					server.watcher.on('all', async (event, file) => {
+						const normalizedFile = normalizePath(file);
+						const normalizedUserCollections = normalizePath(userCollections);
+						const normalizedConfigRolesPath = normalizePath(path.join(process.cwd(), 'config/roles.ts'));
+
 						// Monitor changes in config/collections/**/*.ts and **/*.js
-						if (file.startsWith(userCollections) && (file.endsWith('.ts') || file.endsWith('.js'))) {
+						if (normalizedFile.startsWith(normalizedUserCollections) && (file.endsWith('.ts') || file.endsWith('.js'))) {
 							console.log(`Collection file event: ${event} - \x1b[34m${file}\x1b[0m`);
 
 							clearTimeout(compileTimeout);
@@ -102,7 +111,8 @@ export default defineConfig({
 										lastUnlinkTime = currentTime;
 										console.log(`Collection file deleted: \x1b[31m${file}\x1b[0m`);
 
-										// Handle deletion
+										// Handle deletion - dynamically import cleanupOrphanedFiles
+										const { cleanupOrphanedFiles } = await import('./src/routes/api/compile/compile');
 										await cleanupOrphanedFiles(userCollections, compiledCollections);
 										console.log(`Cleanup completed for deleted file: \x1b[31m${file}\x1b[0m`);
 									} else if (event === 'add' || event === 'change') {
@@ -118,70 +128,34 @@ export default defineConfig({
 										// Track update time
 										lastUUIDUpdate[file] = currentTime;
 
-										// Compile
+										// Compile - dynamically import compile
+										const { compile } = await import('./src/routes/api/compile/compile');
 										await compile({ userCollections, compiledCollections });
 										console.log('Compilation successful!');
 
-										// Trigger content-structure sync via API with retry logic
-										const maxRetries = 3;
-										let retryCount = 0;
-										const syncContentStructure = async () => {
-											try {
-												// Create a proper Node.js request object
-												const req = {
-													method: 'POST',
-													url: '/api/content-structure',
-													originalUrl: '/api/content-structure',
-													headers: {
-														'content-type': 'application/json'
-													},
-													body: JSON.stringify({
-														action: 'recompile'
-													}),
-													on: (event, callback) => {
-														if (event === 'data') {
-															callback(req.body);
-														}
-														if (event === 'end') {
-															callback();
-														}
-													}
-												};
-
-												// Create a proper Node.js response object
-												const res = {
-													setHeader: () => {},
-													getHeader: () => {},
-													write: () => {},
-													end: () => {},
-													statusCode: 200
-												};
-
-												// Use the server's middleware to handle the request
-												await new Promise((resolve) => {
-													server.middlewares(req, res, () => resolve(undefined));
-												});
-
-												console.log('Content structure sync triggered successfully');
-											} catch (error) {
-												if (retryCount < maxRetries) {
-													retryCount++;
-													console.log(`Retrying content structure sync (attempt ${retryCount})...`);
-													await new Promise((resolve) => setTimeout(resolve, 500));
-													return syncContentStructure();
-												}
-												console.error('Failed to trigger content structure sync after retries:', error);
-											}
-										};
-
-										await syncContentStructure();
-
+										// Directly perform actions after compilation
 										try {
-											// Call refactored function without server argument
+											// Dynamically import necessary modules
+											const { isRedisEnabled, clearCache } = await import('./src/databases/redis');
+											const { contentManager } = await import('./src/content/ContentManager');
+											const { generateContentTypes } = await import('./src/content/vite');
+
+											// Clear Redis cache if enabled
+											if (isRedisEnabled()) { // Check if this function works correctly outside request context
+												await clearCache('api:content-structure:*');
+												console.log('Cleared content structure Redis cache.');
+											}
+
+											// Update content manager
+											await contentManager.updateCollections(true);
+											console.log('Content manager updated.');
+
+											// Update collection types
 											await generateContentTypes();
 											console.log(`Collection types updated for: \x1b[32m${file}\x1b[0m`);
-										} catch (error) {
-											console.error('Error updating collection types:', error);
+
+										} catch (syncError) {
+											console.error('Error during post-compilation sync:', syncError);
 										}
 									}
 
@@ -194,16 +168,16 @@ export default defineConfig({
 								} catch (error) {
 									console.error(`Error processing collection file ${event}:`, error);
 								}
-							}, 50);
+							}, 50); // Debounce time
 						}
 
 						// Handle config file changes
-						if (file.startsWith(Path.posix.join(process.cwd(), 'config/roles.ts'))) {
+						if (normalizedFile === normalizedConfigRolesPath) {
 							console.log(`Roles file changed: \x1b[34m${file}\x1b[0m`);
 
 							try {
 								// Clear module cache to force re-import
-								const rolesPath = `file://${Path.posix.resolve(process.cwd(), 'config', 'roles.ts')}`;
+								const rolesPath = `file://${path.resolve(process.cwd(), 'config', 'roles.ts')}`; // Use standard path.resolve
 								// Dynamically reimport updated roles & permissions
 								const { roles } = await import(rolesPath + `?update=${Date.now()}`);
 								// Update roles and permissions in the application
@@ -221,11 +195,13 @@ export default defineConfig({
 				};
 			},
 			config() {
+				// Normalize path for definition, ensuring forward slashes for env vars if needed cross-platform
+				const normalizeForDefine = (p: string) => p.replace(/\\/g, '/');
 				return {
 					define: {
-						'import.meta.env.root': JSON.stringify(Path.posix.join('/', process.cwd().replace(Path.parse(process.cwd()).root, ''))),
-						'import.meta.env.userCollectionsPath': JSON.stringify(userCollections),
-						'import.meta.env.compiledCollectionsPath': JSON.stringify(compiledCollections)
+						'import.meta.env.root': JSON.stringify(normalizeForDefine(path.join('/', process.cwd().replace(path.parse(process.cwd()).root, '')))),
+						'import.meta.env.userCollectionsPath': JSON.stringify(normalizeForDefine(userCollections)),
+						'import.meta.env.compiledCollectionsPath': JSON.stringify(normalizeForDefine(compiledCollections))
 					}
 				};
 			},

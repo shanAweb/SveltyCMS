@@ -30,10 +30,10 @@ interface CompileOptions {
 }
 
 export async function compile(options: CompileOptions = {}): Promise<void> {
-	// Define collection paths directly and use process.cwd()
+	// Define collection paths directly and use process.cwd() - Use standard path.join
 	const {
-		userCollections = path.posix.join(process.cwd(), 'config/collections'),
-		compiledCollections = path.posix.join(process.cwd(), 'compiledCollections')
+		userCollections = path.join(process.cwd(), 'config/collections'),
+		compiledCollections = path.join(process.cwd(), 'compiledCollections')
 	} = options;
 
 	try {
@@ -64,10 +64,12 @@ export async function compile(options: CompileOptions = {}): Promise<void> {
 async function getTypescriptAndJavascriptFiles(folder: string, subdir: string = ''): Promise<string[]> {
 	const files: string[] = [];
 	const collectionNames = new Set<string>();
-	const entries = await fs.readdir(path.posix.join(folder, subdir), { withFileTypes: true });
+	// Use standard path.join
+	const entries = await fs.readdir(path.join(folder, subdir), { withFileTypes: true });
 
 	for (const entry of entries) {
-		const relativePath = path.posix.join(subdir, entry.name);
+		// Use standard path.join
+		const relativePath = path.join(subdir, entry.name);
 
 		if (entry.isDirectory()) {
 			// Recursively get files from subdirectories
@@ -104,14 +106,15 @@ export async function cleanupOrphanedFiles(srcFolder: string, destFolder: string
 				const entries = await fs.readdir(currentFolder, { withFileTypes: true });
 
 				for (const entry of entries) {
-					const fullPath = path.posix.join(currentFolder, entry.name);
+					// Use standard path.join
+					const fullPath = path.join(currentFolder, entry.name);
 
 					if (entry.isDirectory()) {
 						// Only call traverseDirectory recursively if it's a directory
 						await traverseDirectory(fullPath);
 					} else if (entry.isFile() && entry.name.endsWith('.js')) {
-						// Calculate relative path relative to destFolder
-						const relativePath = path.posix.relative(destFolder, fullPath);
+						// Calculate relative path relative to destFolder - Use standard path.relative
+						const relativePath = path.relative(destFolder, fullPath);
 						files.push(relativePath);
 					}
 				}
@@ -127,7 +130,8 @@ export async function cleanupOrphanedFiles(srcFolder: string, destFolder: string
 		const unlinkPromises = existingJsFiles
 			.filter((jsFile) => !validJsFiles.has(jsFile))
 			.map(async (jsFile) => {
-				const fullPath = path.posix.join(destFolder, jsFile);
+				// Use standard path.join
+				const fullPath = path.join(destFolder, jsFile);
 				console.log(`\x1b[31mRemoving orphaned collection file:\x1b[0m \x1b[34m${jsFile}\x1b[0m`);
 				await fs.unlink(fullPath);
 			});
@@ -140,7 +144,8 @@ export async function cleanupOrphanedFiles(srcFolder: string, destFolder: string
 
 			for (const entry of entries) {
 				if (entry.isDirectory()) {
-					const fullPath = path.posix.join(folder, entry.name);
+					// Use standard path.join
+					const fullPath = path.join(folder, entry.name);
 					if (!(await removeEmptyDirs(fullPath))) {
 						isEmpty = false;
 					}
@@ -163,12 +168,13 @@ export async function cleanupOrphanedFiles(srcFolder: string, destFolder: string
 
 // Optimized for creating nested output directories
 async function createOutputDirectories(files: string[], srcFolder: string, destFolder: string): Promise<void> {
-	// Get all unique directory paths from the files
-	const directories = new Set(files.map((file) => path.posix.dirname(file)).filter((dir) => dir !== '.'));
+	// Get all unique directory paths from the files - Use standard path.dirname
+	const directories = new Set(files.map((file) => path.dirname(file)).filter((dir) => dir !== '.'));
 
 	// Create each directory in the output folder concurrently
 	const mkdirPromises = Array.from(directories).map((dir) => {
-		const outputDir = path.posix.join(destFolder, dir);
+		// Use standard path.join
+		const outputDir = path.join(destFolder, dir);
 		return fs.mkdir(outputDir, { recursive: true });
 	});
 
@@ -177,9 +183,12 @@ async function createOutputDirectories(files: string[], srcFolder: string, destF
 
 async function compileFile(file: string, srcFolder: string, destFolder: string): Promise<void> {
 	const isTypeScript = file.endsWith('.ts');
-	const tsFilePath = path.posix.join(srcFolder, file);
-	const jsFilePath = path.posix.join(destFolder, file.replace(/\.(ts|js)$/, '.js'));
-	const shortPath = path.posix.relative(process.cwd(), jsFilePath);
+	// Use standard path.join
+	const tsFilePath = path.join(srcFolder, file);
+	// Use standard path.join
+	const jsFilePath = path.join(destFolder, file.replace(/\.(ts|js)$/, '.js'));
+	// Use standard path.relative
+	const shortPath = path.relative(process.cwd(), jsFilePath);
 
 	try {
 		// 1. Read the file content
@@ -304,7 +313,8 @@ function processHashAndUUID(code: string, hash: string, uuid: string): string {
 }
 
 async function writeCompiledFile(filePath: string, code: string): Promise<void> {
-	await fs.mkdir(path.posix.dirname(filePath), { recursive: true });
+	// Use standard path.dirname
+	await fs.mkdir(path.dirname(filePath), { recursive: true });
 	await fs.writeFile(filePath, code);
 }
 
