@@ -41,7 +41,7 @@ Key features:
 	import CodeBlock from './system/codeblock/CodeBlock.svelte';
 	import { Tabs } from '@skeletonlabs/skeleton-svelte';
 
-	let group = $state('tabs');
+	let group = $state('edit'); // Initial Tab state
 
 	// Props
 	interface Props {
@@ -59,7 +59,7 @@ Key features:
 	// Local state
 	let apiUrl = $state('');
 	let isLoading = $state(true);
-	let tabSet = $state(0);
+
 	// Derived state
 	let derivedFields = $derived.by(() => {
 		return fields || (collection.value?.fields ?? []);
@@ -75,7 +75,7 @@ Key features:
 		return tempCollectionValue;
 	}
 
-	let currentCollectionValue = $state(defaultCollectionValue);
+	let currentCollectionValue = $state<Record<string, any>>(defaultCollectionValue);
 
 	// Dynamic import of widget components
 	const modules: Record<string, { default: any }> = import.meta.glob('@widgets/**/*.svelte', { eager: true });
@@ -96,14 +96,22 @@ Key features:
 		}
 	});
 
+	// Effect to sync local state with the store
+	$effect(() => {
+		// Avoid infinite loops by checking if values are actually different if necessary,
+		// though Svelte's reactivity should handle this reasonably well.
+		// A deep comparison might be needed for complex objects if simple spread isn't enough.
+		if (currentCollectionValue !== collectionValue.value) {
+			// Merge, ensuring the store's base value is preserved if it exists
+			const baseStoreValue = collectionValue.value && typeof collectionValue.value === 'object' ? collectionValue.value : {};
+			collectionValue.set({ ...baseStoreValue, ...currentCollectionValue });
+		}
+	});
+
 	// Functions and helpers
 	function handleRevert() {
 		// Implement revert logic
 		console.warn('Revert function not implemented');
-	}
-
-	function getTabpageheader() {
-		return user.roles !== 'admin' && !collection.value?.revision;
 	}
 
 	function filterFieldsByPermission(fields: any[], userRole: string) {
@@ -124,9 +132,11 @@ Key features:
 
 {#if isLoading}
 	<div class="loading">Loading fields...</div>
+{:else}
+	<!-- Use the state variable 'group' for value and update it on change using e.value -->
 	<Tabs value={group} onValueChange={(e) => (group = e.value)}>
 		{#snippet list()}
-			<Tabs.Control value={0}>
+			<Tabs.Control value="edit">
 				<div class="flex items-center gap-1">
 					<iconify-icon icon="mdi:pen" width="24" class="text-tertiary-500 dark:text-primary-500"> </iconify-icon>
 					<p>{m.fields_edit()}</p>
@@ -134,7 +144,7 @@ Key features:
 			</Tabs.Control>
 
 			{#if collection.value?.revision === true}
-				<Tabs.Control value={1}>
+				<Tabs.Control value="revision">
 					<div class="flex items-center gap-1">
 						<iconify-icon icon="pepicons-pop:countdown" width="24" class="text-tertiary-500 dark:text-primary-500"> </iconify-icon>
 						<p>{m.applayout_version()} <span class="preset-outline-tertiary badge dark:preset-outline-primary rounded-full">1</span></p>
@@ -143,7 +153,7 @@ Key features:
 			{/if}
 
 			{#if collection.value?.livePreview === true}
-				<Tabs.Control value={2}>
+				<Tabs.Control value="preview">
 					<div class="flex items-center gap-1">
 						<iconify-icon icon="mdi:eye-outline" width="24" class="text-tertiary-500 dark:text-primary-500"> </iconify-icon>
 						<p>{m.Fields_preview()}</p>
@@ -152,7 +162,7 @@ Key features:
 			{/if}
 
 			{#if user.roles === 'admin'}
-				<Tabs.Control value={3}>
+				<Tabs.Control value="api">
 					<div class="flex items-center gap-1">
 						<iconify-icon icon="ant-design:api-outlined" width="24" class="text-tertiary-500 dark:text-primary-500"> </iconify-icon>
 						<p>API</p>
@@ -160,8 +170,11 @@ Key features:
 				</Tabs.Control>
 			{/if}
 		{/snippet}
+
 		{#snippet content()}
-			{#if tabSet === 0}
+			<!-- Use Tabs.Panel with matching string values -->
+			<Tabs.Panel value="edit">
+				<!-- Edit tab content -->
 				<div class="text-error-500 mb-2 text-center text-xs">{m.fields_required()}</div>
 				<div class="dark:border-surface-500 dark:bg-surface-900 rounded-md border bg-white px-4 py-6 drop-shadow-2xl">
 					<div class="flex flex-wrap items-center justify-center gap-1 overflow-auto">
@@ -187,17 +200,24 @@ Key features:
 													</div>
 													<!-- Display translation progress -->
 													<div class="text-xs font-normal">
-														({Math.round(
-															translationProgress.value[contentLanguage.value]?.translated.has(
-																`${String(collection.value?.name)}.${getFieldName(field)}`
-															)
-																? 1
-																: 0
-														)}%)
+														({() => {
+															const lang = contentLanguage.value;
+															const allProgress = translationProgress.value; // Use original type
+															let progressPercent = 0;
+															// Check if lang is valid and exists as a key
+															if (lang && allProgress && Object.prototype.hasOwnProperty.call(allProgress, lang)) {
+																const progressForLang = allProgress[lang]; // Access safely
+																// Check if progressForLang and its 'translated' property exist
+																if (progressForLang && progressForLang.translated) {
+																	const hasTranslated = progressForLang.translated.has(`${String(collection.value?.name)}.${getFieldName(field)}`);
+																	progressPercent = Math.round(hasTranslated ? 1 : 0);
+																}
+															}
+															return progressPercent;
+														}}()%)
 													</div>
 												</div>
 											{/if}
-
 											{#if field.icon}
 												<iconify-icon icon={field.icon} color="dark" width="22"> </iconify-icon>
 											{/if}
@@ -214,12 +234,18 @@ Key features:
 												{field}
 												WidgetData={{}}
 												bind:value={
-													() => currentCollectionValue[getFieldName(field, true)],
+													() => currentCollectionValue?.[getFieldName(field, true)],
 													(v) => {
-														const temp = currentCollectionValue;
-														temp[getFieldName(field, true)] = v;
-														currentCollectionValue = temp;
-														collectionValue.set({ ...collectionValue.value, ...currentCollectionValue });
+														const fieldName = getFieldName(field, true);
+														if (typeof fieldName === 'string' && fieldName.length > 0) {
+															// Ensure currentCollectionValue is treated as an object
+															const base = (currentCollectionValue || {}) as Record<string, any>;
+															// Create a new object for the update
+															// @ts-ignore - Bypass persistent index signature error
+															currentCollectionValue = { ...base, [fieldName]: v };
+														} else {
+															console.error('Invalid fieldName generated:', fieldName, 'for field:', field);
+														}
 													}
 												}
 											/>
@@ -232,59 +258,71 @@ Key features:
 						{/each}
 					</div>
 				</div>
-			{:else if tabSet === 1}
-				<!-- Revision tab content -->
-				<div class="mb-2 flex items-center justify-between gap-2">
-					<p class="text-tertiary-500 dark:text-primary-500 text-center">{m.fields_revision_compare()}</p>
-					<button class="preset-outline-tertiary btn dark:preset-tonal-primary border-primary-500 border" onclick={handleRevert}
-						>{m.fields_revision_revert()}</button
-					>
-				</div>
-				<select class="select mb-2">
-					<option value="1">{m.fields_revision_most_recent()}</option>
-					<option value="2">February 19th 2024, 4:00 PM</option>
-				</select>
+			</Tabs.Panel>
 
-				<div class="flex justify-between dark:text-white">
-					<!-- Current version -->
-					<div class="w-full text-center">
-						<p class="mb-4 sm:mb-0">{m.fields_revision_current_version()}</p>
-						<CodeBlock lang="js" rounded="rounded-container" code={JSON.stringify(collectionValue.value, null, 2)} />
+			{#if collection.value?.revision === true}
+				<Tabs.Panel value="revision">
+					<!-- Revision tab content -->
+					<div class="mb-2 flex items-center justify-between gap-2">
+						<p class="text-tertiary-500 dark:text-primary-500 text-center">{m.fields_revision_compare()}</p>
+						<button class="preset-outline-tertiary btn dark:preset-tonal-primary border-primary-500 border" onclick={handleRevert}
+							>{m.fields_revision_revert()}</button
+						>
 					</div>
-					<div
-						class="ml-1 min-h-[1em] w-px self-stretch bg-linear-to-tr from-transparent via-neutral-500 to-transparent opacity-20 dark:opacity-100"
-					></div>
-					<!-- Revision version -->
-					<div class="ml-1 w-full text-left">
-						<p class="text-tertiary-500 text-center">February 19th 2024, 4:00 PM</p>
-						<CodeBlock lang="json" buttonLabel="" code={JSON.stringify(collectionValue.value, null, 2)} />
-					</div>
-				</div>
-			{:else if tabSet === 2 && collection.value?.livePreview === true}
-				<!-- Live Preview tab content -->
-				<div class="wrapper">
-					<h2 class="text-tertiary-500 dark:text-primary-500 mb-4 text-center text-xl font-bold">Live Preview</h2>
-					<div class="card preset-tonal-secondary mb-4 p-1 sm:p-4">
-						{@html getLivePreviewContent()}
-					</div>
-				</div>
-			{:else if tabSet === 3}
-				<!-- API Json tab content -->
-				{#if collectionValue.value == null}
-					<div class="preset-tonal-error border-error-500 mb-4 border py-2 text-center font-bold">{m.fields_api_nodata()}</div>
-				{:else}
-					<div class="wrapper relative z-0 mb-4 flex w-full items-center justify-start gap-1">
-						<p class="flex items-center">
-							<span class="mr-1">API URL:</span>
-							<iconify-icon icon="ph:copy" useclipboard={apiUrl} class="text-tertiary-500 dark:text-primary-500 pb-6"> </iconify-icon>
-						</p>
-						<button class="btn text-left text-wrap" onclick={() => window.open(apiUrl, '_blank')} title={apiUrl}>
-							<span class="text-tertiary-500 dark:text-primary-500 text-wrap">{apiUrl}</span>
-						</button>
-					</div>
+					<select class="select mb-2">
+						<option value="1">{m.fields_revision_most_recent()}</option>
+						<option value="2">February 19th 2024, 4:00 PM</option>
+					</select>
 
-					<CodeBlock lang="json" buttonLabel="Copy" code={JSON.stringify(collectionValue.value, null, 2)} />
-				{/if}
+					<div class="flex justify-between dark:text-white">
+						<!-- Current version -->
+						<div class="w-full text-center">
+							<p class="mb-4 sm:mb-0">{m.fields_revision_current_version()}</p>
+							<CodeBlock lang="js" rounded="rounded-container" code={JSON.stringify(collectionValue.value, null, 2)} />
+						</div>
+						<div
+							class="ml-1 min-h-[1em] w-px self-stretch bg-linear-to-tr from-transparent via-neutral-500 to-transparent opacity-20 dark:opacity-100"
+						></div>
+						<!-- Revision version -->
+						<div class="ml-1 w-full text-left">
+							<p class="text-tertiary-500 text-center">February 19th 2024, 4:00 PM</p>
+							<CodeBlock lang="js" code={JSON.stringify(collectionValue.value, null, 2)} />
+						</div>
+					</div>
+				</Tabs.Panel>
+			{/if}
+
+			{#if collection.value?.livePreview === true}
+				<Tabs.Panel value="preview">
+					<!-- Live Preview tab content -->
+					<div class="wrapper">
+						<h2 class="text-tertiary-500 dark:text-primary-500 mb-4 text-center text-xl font-bold">Live Preview</h2>
+						<div class="card preset-tonal-secondary mb-4 p-1 sm:p-4">
+							{@html getLivePreviewContent()}
+						</div>
+					</div>
+				</Tabs.Panel>
+			{/if}
+
+			{#if user.roles === 'admin'}
+				<Tabs.Panel value="api">
+					<!-- API Json tab content -->
+					{#if collectionValue.value == null}
+						<div class="preset-tonal-error border-error-500 mb-4 border py-2 text-center font-bold">{m.fields_api_nodata()}</div>
+					{:else}
+						<div class="wrapper relative z-0 mb-4 flex w-full items-center justify-start gap-1">
+							<p class="flex items-center">
+								<span class="mr-1">API URL:</span>
+								<iconify-icon icon="ph:copy" useclipboard={apiUrl} class="text-tertiary-500 dark:text-primary-500 pb-6"> </iconify-icon>
+							</p>
+							<button class="btn text-left text-wrap" onclick={() => window.open(apiUrl, '_blank')} title={apiUrl}>
+								<span class="text-tertiary-500 dark:text-primary-500 text-wrap">{apiUrl}</span>
+							</button>
+						</div>
+
+						<CodeBlock lang="js" code={JSON.stringify(collectionValue.value, null, 2)} />
+					{/if}
+				</Tabs.Panel>
 			{/if}
 		{/snippet}
 	</Tabs>
