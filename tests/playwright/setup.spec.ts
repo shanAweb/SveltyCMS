@@ -1,9 +1,19 @@
 import { test, expect } from '@playwright/test';
+import { TestUtils, testConfig } from '../helpers/test-config';
 
 test.describe('SveltyCMS Setup and Configuration', () => {
   test.beforeEach(async ({ page }) => {
+    // Clean up any existing configuration
+    await TestUtils.cleanup(page);
+    
+    // Mock fresh installation state
+    await page.addInitScript(() => {
+      localStorage.removeItem('sveltycms-configured');
+      localStorage.removeItem('sveltycms-setup-complete');
+    });
+    
     // Start with a fresh installation state
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle', timeout: testConfig.timeouts.extraLong });
   });
 
   test('should display setup wizard for fresh installation', async ({ page }) => {

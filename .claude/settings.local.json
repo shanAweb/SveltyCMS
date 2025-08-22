@@ -16,7 +16,8 @@
       "Bash(docker:*)",
       "Bash(powershell:*)",
       "Bash(timeout:*)",
-      "Bash(npx playwright test:*)"
+      "Bash(npx playwright test:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": [],

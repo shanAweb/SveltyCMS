@@ -7,13 +7,17 @@
  *   - Logs out and checks redirect to login page
  */
 import { test, expect } from '@playwright/test';
+import { TestUtils, testConfig } from '../helpers/test-config';
 
 test.describe('Authentication Flow', () => {
 	test.beforeEach(async ({ page }) => {
+		// Clean up any existing session data
+		await TestUtils.cleanup(page);
+		
 		// Navigate to login page using baseURL from config
 		const response = await page.goto('/login', { 
 			waitUntil: 'domcontentloaded',
-			timeout: 60000 
+			timeout: testConfig.timeouts.extraLong 
 		});
 		
 		// Check if we got a successful response
@@ -25,64 +29,115 @@ test.describe('Authentication Flow', () => {
 		}
 	});
 
-	test('should login with valid credentials', async ({ page }) => {
-		test.setTimeout(120000);
+	test('should login with valid credentials as admin', async ({ page }) => {
+		test.setTimeout(testConfig.timeouts.extraLong);
 
 		await page.waitForLoadState('networkidle');
 		
-		// Use data-testid attributes for more reliable selectors
-		const emailInput = page.locator('[data-testid="email"], input[name="email"], input[type="email"]').first();
-		const passwordInput = page.locator('[data-testid="password"], input[name="password"], input[type="password"]').first();
-		const loginButton = page.locator('[data-testid="login-button"], button:has-text("Sign In"), button[type="submit"]').first();
+		// Use the unified selectors and credentials from test config
+		const emailInput = page.locator(testConfig.selectors.email).first();
+		const passwordInput = page.locator(testConfig.selectors.password).first();
+		const loginButton = page.locator(testConfig.selectors.loginButton).first();
 
-		await expect(emailInput).toBeVisible({ timeout: 30000 });
+		await expect(emailInput).toBeVisible({ timeout: testConfig.timeouts.long });
 
-		// Fill login form fields
-		await emailInput.fill(process.env.TEST_ADMIN_EMAIL || 'admin@example.com');
-		await passwordInput.fill(process.env.TEST_ADMIN_PASSWORD || 'admin@123');
+		// Fill login form fields with admin credentials
+		await emailInput.fill(testConfig.users.admin.email);
+		await passwordInput.fill(testConfig.users.admin.password);
 
 		// Submit the form
 		await loginButton.click();
 
 		// Assert successful login (more flexible URL matching)
-		await expect(page).toHaveURL(/\/(admin|dashboard|en\/Collections)/i, { timeout: 10000 });
+		await expect(page).toHaveURL(/\/(admin|dashboard|en\/Collections)/i, { timeout: testConfig.timeouts.medium });
 		
 		// Verify we're logged in by checking for user menu or dashboard elements
-		const userIndicator = page.locator('[data-testid="user-menu"], [aria-label="User menu"], button:has-text("Sign Out")').first();
-		await expect(userIndicator).toBeVisible({ timeout: 30000 });
+		const userIndicator = page.locator(testConfig.selectors.userMenu).first();
+		await expect(userIndicator).toBeVisible({ timeout: testConfig.timeouts.long });
+	});
+
+	test('should login with different user roles', async ({ page }) => {
+		test.setTimeout(testConfig.timeouts.extraLong);
+
+		const userTypes = ['admin', 'editor', 'user'] as const;
+		
+		for (const userType of userTypes) {
+			// Clean up between user tests
+			await TestUtils.cleanup(page);
+			await page.goto('/login');
+			
+			await TestUtils.login(page, userType);
+			
+			// Verify login was successful
+			await expect(page).toHaveURL(/\/(admin|dashboard|en\/Collections)/i, { timeout: testConfig.timeouts.medium });
+			
+			// Logout for next iteration
+			await TestUtils.logout(page);
+		}
 	});
 
 	test('should logout successfully', async ({ page }) => {
-		// First login
-		await page.fill('[data-testid="email"], input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@example.com');
-		await page.fill('[data-testid="password"], input[name="password"]', process.env.TEST_ADMIN_PASSWORD || 'admin@123');
-		await page.click('[data-testid="login-button"], button:has-text("Sign In")');
-		
-		await expect(page).toHaveURL(/\/(admin|dashboard|en\/Collections)/i, { timeout: 10000 });
+		test.setTimeout(testConfig.timeouts.extraLong);
 
-		// Find and click logout button
-		const logoutButton = page.locator('[data-testid="logout-button"], button[aria-label="Sign Out"], button:has-text("Sign Out")').first();
-		await expect(logoutButton).toBeVisible({ timeout: 30000 });
-		await logoutButton.click();
-
-		// Assert redirect back to login
-		await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
+		// First login using utility
+		await TestUtils.login(page, 'admin');
 		
-		// Verify we're logged out
-		const loginForm = page.locator('[data-testid="login-form"], form, input[name="email"]').first();
+		await expect(page).toHaveURL(/\/(admin|dashboard|en\/Collections)/i, { timeout: testConfig.timeouts.medium });
+
+		// Use the utility function for logout
+		await TestUtils.logout(page);
+
+		// Verify we're logged out and redirected
+		await expect(page).toHaveURL(/\/login/, { timeout: testConfig.timeouts.medium });
+		
+		// Verify login form is visible
+		const loginForm = page.locator(testConfig.selectors.email).first();
 		await expect(loginForm).toBeVisible();
 	});
 
 	test('should show error for invalid credentials', async ({ page }) => {
-		await page.fill('[data-testid="email"], input[name="email"]', 'invalid@example.com');
-		await page.fill('[data-testid="password"], input[name="password"]', 'wrongpassword');
-		await page.click('[data-testid="login-button"], button:has-text("Sign In")');
+		test.setTimeout(testConfig.timeouts.medium);
+
+		await page.fill(testConfig.selectors.email, 'invalid@example.com');
+		await page.fill(testConfig.selectors.password, 'wrongpassword');
+		await page.click(testConfig.selectors.loginButton);
 
 		// Should show error message
-		const errorMessage = page.locator('[data-testid="error-message"], .error, [role="alert"]').first();
-		await expect(errorMessage).toBeVisible({ timeout: 5000 });
+		const errorMessage = page.locator(testConfig.selectors.errorMessage).first();
+		await expect(errorMessage).toBeVisible({ timeout: testConfig.timeouts.short });
 		
 		// Should remain on login page
 		await expect(page).toHaveURL(/\/login/);
+	});
+
+	test('should validate required fields', async ({ page }) => {
+		test.setTimeout(testConfig.timeouts.medium);
+
+		// Try to submit without filling fields
+		await page.click(testConfig.selectors.loginButton);
+
+		// Should show validation errors or stay on login page
+		await expect(page).toHaveURL(/\/login/);
+		
+		// Fill only email, leave password empty
+		await page.fill(testConfig.selectors.email, testConfig.users.admin.email);
+		await page.click(testConfig.selectors.loginButton);
+		
+		// Should still be on login page
+		await expect(page).toHaveURL(/\/login/);
+	});
+
+	test('should handle session persistence', async ({ page }) => {
+		test.setTimeout(testConfig.timeouts.extraLong);
+
+		// Login
+		await TestUtils.login(page, 'admin');
+		await expect(page).toHaveURL(/\/(admin|dashboard|en\/Collections)/i, { timeout: testConfig.timeouts.medium });
+
+		// Refresh the page
+		await page.reload();
+
+		// Should still be logged in (if session persistence is implemented)
+		await expect(page).not.toHaveURL(/\/login/, { timeout: testConfig.timeouts.short });
 	});
 });

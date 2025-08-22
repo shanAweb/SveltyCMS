@@ -1,18 +1,16 @@
 import { test, expect } from '@playwright/test';
+import { TestUtils, testConfig } from '../helpers/test-config';
 
 test.describe('Navigation Management', () => {
+  test.setTimeout(testConfig.timeouts.extraLong);
+
   test.beforeEach(async ({ page }) => {
-    // Use environment-based URL or fallback to dev server
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5174';
-    
-    // Login as admin user
-    await page.goto(`${baseUrl}/login`);
-    await page.fill('[data-testid="email"]', 'admin@example.com');
-    await page.fill('[data-testid="password"]', 'password123');
-    await page.click('[data-testid="login-button"]');
+    // Clean up and login as admin
+    await TestUtils.cleanup(page);
+    await TestUtils.login(page, 'admin');
     
     // Navigate to navigation manager
-    await page.goto(`${baseUrl}/admin/navigation`);
+    await page.goto('/admin/navigation', { waitUntil: 'networkidle', timeout: testConfig.timeouts.extraLong });
   });
 
   test('should display navigation manager interface', async ({ page }) => {

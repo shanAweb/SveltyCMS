@@ -1,17 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { createReadStream } from 'fs';
+import { TestUtils, testConfig } from '../helpers/test-config';
 import path from 'path';
 
 test.describe('Media Gallery Management', () => {
   test.beforeEach(async ({ page }) => {
-    // Login as admin user
-    await page.goto('/login');
-    await page.fill('[data-testid="email"]', 'admin@example.com');
-    await page.fill('[data-testid="password"]', 'password123');
-    await page.click('[data-testid="login-button"]');
+    // Clean up and login as admin
+    await TestUtils.cleanup(page);
+    await TestUtils.login(page, 'admin');
     
     // Navigate to media gallery
-    await page.goto('/admin/media');
+    await page.goto('/admin/media', { waitUntil: 'networkidle', timeout: testConfig.timeouts.extraLong });
   });
 
   test('should display media gallery interface', async ({ page }) => {
