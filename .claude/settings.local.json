@@ -17,7 +17,8 @@
       "Bash(powershell:*)",
       "Bash(timeout:*)",
       "Bash(npx playwright test:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": [],

@@ -339,6 +339,9 @@ export default defineConfig(async () => {
 		},
 
 		server: {
+			port: process.env.PORT ? parseInt(process.env.PORT) : 5173,
+			host: process.env.HOST || 'localhost',
+			open: process.env.VITE_OPEN === 'true',
 			fs: { allow: ['static', '.'] } // Allow serving files from specific directories
 			// Temporarily disable HMR to test if it's causing loading flicker
 			// hmr: false // Uncomment this line to disable HMR for testing
