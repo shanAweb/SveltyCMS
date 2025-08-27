@@ -65,15 +65,19 @@ jobs:
         run: bunx playwright install --with-deps
 
       - name: Run local server
-        run: bun run build && bun run preview --port 5173 &
+        run: bun run build && bun run preview --port 4173 &
+        env:
+          SERVER_PID: $!
+
+      - name: Wait for server to be ready
+        run: |
+          timeout 30s bash -c 'until curl -f http://localhost:4173 >/dev/null 2>&1; do echo "Waiting for server..."; sleep 3; done'
+          echo "Server is ready!"
 
       - name: Run Playwright tests
         run: |
           mkdir -p test-results/playwright
-          for file in ${{ matrix.test-file }}; do
-            bunx playwright test $file --workers 10 --output=test-results/playwright &
-          done
-          wait
+          bunx playwright test ${{ matrix.test-file }} --workers 1 --output=test-results/playwright
         env:
           DB_TYPE: 'mongodb'
           DB_HOST: 'localhost'
@@ -115,7 +119,7 @@ jobs:
           USE_2FA: 'false'
           TWO_FACTOR_AUTH_SECRET: ''
           TWO_FACTOR_AUTH_BACKUP_CODES_COUNT: '10'
-          HOST_DEV: 'http://localhost:5173'
+          HOST_DEV: 'http://localhost:4173'
           HOST_PROD: 'http://localhost:4173'
           SITE_NAME: 'SveltyCMS Test Site'
           PASSWORD_LENGTH: '8'
