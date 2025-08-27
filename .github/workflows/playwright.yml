@@ -188,6 +188,7 @@ jobs:
           LOG_RETENTION_DAYS: '7'
           LOG_ROTATION_SIZE: '5242880'
           DEMO: 'true'
+          API_BASE_URL: 'http://localhost:4173'
 
       - name: Cleanup server
         if: always()
@@ -265,10 +266,34 @@ jobs:
           # Enable demo mode for CI
           sed -i "s|DEMO: false|DEMO: true|g" config/public.ts
 
+      - name: Run local server
+        run: |
+          bun run build
+          bun run preview --port 4173 &
+          echo $! > server.pid
+          sleep 5
+
+      - name: Wait for server to be ready
+        run: |
+          timeout 30s bash -c 'until curl -f http://localhost:4173 >/dev/null 2>&1; do echo "Waiting for server..."; sleep 3; done'
+          echo "Server is ready!"
+
       - name: Run Bun tests
         run: |
           mkdir -p test-results/bun
           bun test tests/bun --output-file test-results/bun/test-results.txt
+          TEST_EXIT_CODE=$?
+
+          echo "Stopping server..."
+          SERVER_PID=$(cat server.pid 2>/dev/null || echo "")
+          if [ ! -z "$SERVER_PID" ]; then
+            kill $SERVER_PID 2>/dev/null || true
+            wait $SERVER_PID 2>/dev/null || true
+          fi
+
+          exit $TEST_EXIT_CODE
+        env:
+          API_BASE_URL: 'http://localhost:4173'
 
       - uses: actions/upload-artifact@v4
         if: always()
