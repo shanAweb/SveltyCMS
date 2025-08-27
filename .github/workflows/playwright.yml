@@ -101,11 +101,9 @@ jobs:
             cp config/private.ts config/private.ts.backup
           fi
           
-          # Create CI-optimized public.ts config
+          # Create CI-optimized public.ts config (standalone, no imports)
           cat > config/public.ts << 'EOF'
-          import { createPublicConfig } from './types.ts';
-          
-          export const publicEnv = createPublicConfig({
+          export const publicEnv = {
             SITE_NAME: 'SveltyCMS Test Site',
             PASSWORD_LENGTH: 8,
             DEFAULT_CONTENT_LANGUAGE: 'en',
@@ -125,14 +123,12 @@ jobs:
             LOG_ROTATION_SIZE: 5242880,
             SEASONS: false,
             DEMO: true
-          });
+          };
           EOF
           
-          # Create CI-optimized private.ts config
+          # Create CI-optimized private.ts config (standalone, no imports)
           cat > config/private.ts << 'EOF'
-          import { createPrivateConfig } from './types.ts';
-          
-          export const privateEnv = createPrivateConfig({
+          export const privateEnv = {
             DB_TYPE: 'mongodb',
             DB_HOST: 'localhost',
             DB_PORT: 27017,
@@ -164,7 +160,7 @@ jobs:
             TWO_FACTOR_AUTH_BACKUP_CODES_COUNT: 10,
             ROLES: ['admin', 'editor'],
             PERMISSIONS: ['create', 'read', 'update', 'delete']
-          });
+          };
           EOF
 
       - name: Run local server
@@ -317,11 +313,9 @@ jobs:
             cp config/private.ts config/private.ts.backup
           fi
           
-          # Create CI-optimized public.ts config
+          # Create CI-optimized public.ts config (standalone, no imports)
           cat > config/public.ts << 'EOF'
-          import { createPublicConfig } from './types.ts';
-          
-          export const publicEnv = createPublicConfig({
+          export const publicEnv = {
             SITE_NAME: 'SveltyCMS Test Site',
             PASSWORD_LENGTH: 8,
             DEFAULT_CONTENT_LANGUAGE: 'en',
@@ -341,14 +335,12 @@ jobs:
             LOG_ROTATION_SIZE: 5242880,
             SEASONS: false,
             DEMO: true
-          });
+          };
           EOF
           
-          # Create CI-optimized private.ts config
+          # Create CI-optimized private.ts config (standalone, no imports)
           cat > config/private.ts << 'EOF'
-          import { createPrivateConfig } from './types.ts';
-          
-          export const privateEnv = createPrivateConfig({
+          export const privateEnv = {
             DB_TYPE: 'mongodb',
             DB_HOST: 'localhost',
             DB_PORT: 27017,
@@ -380,7 +372,7 @@ jobs:
             TWO_FACTOR_AUTH_BACKUP_CODES_COUNT: 10,
             ROLES: ['admin', 'editor'],
             PERMISSIONS: ['create', 'read', 'update', 'delete']
-          });
+          };
           EOF
 
       - name: Run local server
