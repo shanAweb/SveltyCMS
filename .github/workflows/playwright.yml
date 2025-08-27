@@ -64,9 +64,6 @@ jobs:
       - name: Install Playwright Browsers
         run: bunx playwright install --with-deps
 
-      - name: Generate config files
-        run: bun run installer --yes
-
       - name: Run local server
         run: bun run build && bun run preview --port 5173 &
 
