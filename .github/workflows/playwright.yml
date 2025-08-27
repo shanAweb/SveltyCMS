@@ -58,7 +58,7 @@ jobs:
       - name: Install Playwright Browsers
         run: bunx playwright install --with-deps
       - name: Run local server
-        run: bun run build && bun run preview &
+        run: bun run build && bun run preview --port 5173 &
       - name: Run Playwright tests
         run: |
           mkdir -p test-results/playwright
