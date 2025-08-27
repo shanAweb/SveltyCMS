@@ -64,6 +64,9 @@ jobs:
       - name: Install Playwright Browsers
         run: bunx playwright install --with-deps
 
+      - name: Generate config files
+        run: bun run installer --yes
+
       - name: Run local server
         run: bun run build && bun run preview --port 5173 &
 
@@ -139,8 +142,7 @@ jobs:
           LOG_ROTATION_SIZE: '5242880'
           DEMO: 'true'
 
-      - name: Upload Playwright test results
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-test-results
@@ -162,9 +164,12 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Generate config files
+        run: bun run installer --yes
+
       - name: Run local server
         run: bun run build && bun run preview --port 5173 &
-
+      
       - name: Run Bun tests
         run: |
           mkdir -p test-results/bun
