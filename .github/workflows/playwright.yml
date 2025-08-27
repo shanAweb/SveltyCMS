@@ -169,6 +169,11 @@ jobs:
 
       - name: Run local server
         run: bun run build && bun run preview --port 5173 &
+
+      - name: Wait for server to be ready
+        run: |
+          timeout 30s bash -c 'until curl -f http://localhost:5173 >/dev/null 2>&1; do echo "Waiting for server..."; sleep 1; done'
+          echo "Server is ready!"
       
       - name: Run Bun tests
         run: |
