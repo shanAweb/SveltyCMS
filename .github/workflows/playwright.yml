@@ -149,35 +149,42 @@ jobs:
           retention-days: 30
 
   bun-tests:
-    name: SveltyCMS Bun Tests
-    runs-on: ubuntu-latest
+  name: SveltyCMS Bun Tests
+  runs-on: ubuntu-latest
 
-    steps:
-      - name: Git checkout
-        uses: actions/checkout@v4
+  steps:
+    - name: Git checkout
+      uses: actions/checkout@v4
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
+    - name: Install Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
 
-      - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.10.0
-        with:
-          mongodb-version: latest
-          mongodb-username: admin
-          mongodb-password: admin
-          mongodb-db: SveltyCMS
-          mongodb-port: 27017
+    - name: Start MongoDB
+      uses: supercharge/mongodb-github-action@1.10.0
+      with:
+        mongodb-version: latest
+        mongodb-username: admin
+        mongodb-password: admin
+        mongodb-db: SveltyCMS
+        mongodb-port: 27017
 
-      - name: Install dependencies
-        run: bun install
+    - name: Install dependencies
+      run: bun install
 
-      - name: Run Bun tests
-        run: |
-          mkdir -p test-results/bun
-          bun test tests/bun/api/api-endpoints.test.ts > test-results/bun/test-results.txt
-        env:
+    - name: Build and start server
+      run: |
+        bun run build
+        bun run preview &
+        sleep 5   # Wait for server to boot
+
+    - name: Run Bun tests
+      run: |
+        mkdir -p test-results/bun
+        bun test tests/bun/api/api-endpoints.test.ts > test-results/bun/test-results.txt
+
+      env:
           DB_TYPE: 'mongodb'
           DB_HOST: 'localhost'
           DB_PORT: '27017'
