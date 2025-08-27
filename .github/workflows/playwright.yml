@@ -165,7 +165,10 @@ jobs:
         run: bun install
 
       - name: Generate config files
-        run: bun run installer --yes
+        run: |
+          # Run installer non-interactively with all defaults
+          echo "Running installer in non-interactive mode..."
+          bun run installer --yes --non-interactive
 
       - name: Run local server
         run: bun run build && bun run preview --port 5173 & SERVER_PID=$!
