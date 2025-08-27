@@ -64,6 +64,56 @@ jobs:
       - name: Install Playwright Browsers
         run: bunx playwright install --with-deps
 
+      - name: Setup SvelteKit configuration
+        run: |
+          # Create .svelte-kit directory if it doesn't exist
+          mkdir -p .svelte-kit
+          
+          # Create basic tsconfig.json for .svelte-kit
+          cat > .svelte-kit/tsconfig.json << 'EOF'
+          {
+            "compilerOptions": {
+              "allowJs": true,
+              "checkJs": true,
+              "esModuleInterop": true,
+              "forceConsistentCasingInFileNames": true,
+              "resolveJsonModule": true,
+              "skipLibCheck": true,
+              "strict": true,
+              "moduleResolution": "bundler"
+            },
+            "extends": "./tsconfig.json"
+          }
+          EOF
+          
+          # Create basic config files if they don't exist
+          mkdir -p config
+          
+          # Create minimal public.ts config for CI
+          if [ ! -f config/public.ts ]; then
+            cat > config/public.ts << 'EOF'
+            export const publicConfig = {
+              SITE_NAME: 'SveltyCMS Test Site',
+              DEMO: true
+            };
+          EOF
+          fi
+          
+          # Create minimal private.ts config for CI
+          if [ ! -f config/private.ts ]; then
+            cat > config/private.ts << 'EOF'
+            export const privateConfig = {
+              JWT_SECRET_KEY: 'ci-test-jwt-secret-key-for-github-actions',
+              DB_TYPE: 'mongodb',
+              DB_HOST: 'localhost',
+              DB_PORT: '27017',
+              DB_NAME: 'SveltyCMS',
+              DB_USER: 'admin',
+              DB_PASSWORD: 'admin'
+            };
+          EOF
+          fi
+
       - name: Run local server
         run: |
           bun run build
@@ -176,6 +226,56 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Setup SvelteKit configuration
+        run: |
+          # Create .svelte-kit directory if it doesn't exist
+          mkdir -p .svelte-kit
+          
+          # Create basic tsconfig.json for .svelte-kit
+          cat > .svelte-kit/tsconfig.json << 'EOF'
+          {
+            "compilerOptions": {
+              "allowJs": true,
+              "checkJs": true,
+              "esModuleInterop": true,
+              "forceConsistentCasingInFileNames": true,
+              "resolveJsonModule": true,
+              "skipLibCheck": true,
+              "strict": true,
+              "moduleResolution": "bundler"
+            },
+            "extends": "./tsconfig.json"
+          }
+          EOF
+          
+          # Create basic config files if they don't exist
+          mkdir -p config
+          
+          # Create minimal public.ts config for CI
+          if [ ! -f config/public.ts ]; then
+            cat > config/public.ts << 'EOF'
+            export const publicConfig = {
+              SITE_NAME: 'SveltyCMS Test Site',
+              DEMO: true
+            };
+          EOF
+          fi
+          
+          # Create minimal private.ts config for CI
+          if [ ! -f config/private.ts ]; then
+            cat > config/private.ts << 'EOF'
+            export const privateConfig = {
+              JWT_SECRET_KEY: 'ci-test-jwt-secret-key-for-github-actions',
+              DB_TYPE: 'mongodb',
+              DB_HOST: 'localhost',
+              DB_PORT: '27017',
+              DB_NAME: 'SveltyCMS',
+              DB_USER: 'admin',
+              DB_PASSWORD: 'admin'
+            };
+          EOF
+          fi
 
       - name: Run local server
         run: |
