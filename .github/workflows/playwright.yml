@@ -168,17 +168,24 @@ jobs:
         run: bun run installer --yes
 
       - name: Run local server
-        run: bun run build && bun run preview --port 5173 &
+        run: bun run build && bun run preview --port 5173 & SERVER_PID=$!
 
       - name: Wait for server to be ready
         run: |
-          timeout 30s bash -c 'until curl -f http://localhost:5173 >/dev/null 2>&1; do echo "Waiting for server..."; sleep 1; done'
+          timeout 30s bash -c 'until curl -f http://localhost:5173 >/dev/null 2>&1; do echo "Waiting for server..."; sleep 3; done'
           echo "Server is ready!"
       
       - name: Run Bun tests
         run: |
           mkdir -p test-results/bun
           bun test tests/bun/api/api-endpoints.test.ts > test-results/bun/test-results.txt
+          TEST_EXIT_CODE=$?
+
+          echo "Stopping server..."
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+
+          exit $TEST_EXIT_CODE
         env:
           DB_TYPE: 'mongodb'
           DB_HOST: 'localhost'
