@@ -65,7 +65,7 @@ jobs:
         id: install-playwright
         run: bunx playwright install --with-deps
 
-      - name: Setup SvelteKit configuration (Keep existing configs)
+      - name: Setup SvelteKit configuration (Fixed - No TypeScript imports)
         run: |
           # Create .svelte-kit directory if it doesn't exist
           mkdir -p .svelte-kit
@@ -94,19 +94,73 @@ jobs:
           }
           EOF
           
-          # Update your existing config files for CI environment
-          # We'll only update the values that need to change for CI, not overwrite the entire structure
+          # Create CI-compatible config files (remove TypeScript imports that cause issues in CI)
           
-          # Update HOST_DEV and HOST_PROD to use port 4173 for CI
-          sed -i "s|http://localhost:5173|http://localhost:4173|g" config/public.ts
+          # Backup original files
+          cp config/public.ts config/public.ts.original
+          cp config/private.ts config/private.ts.original
           
-          # Update database settings for CI
-          sed -i "s|mongodb://localhost|localhost|g" config/private.ts
-          sed -i "s|DB_USER: 'root'|DB_USER: 'admin'|g" config/private.ts
-          sed -i "s|DB_PASSWORD: 'password'|DB_PASSWORD: 'admin'|g" config/private.ts
+          # Create CI-optimized public.ts config (standalone, no imports)
+          cat > config/public.ts << 'EOF'
+          export const publicEnv = {
+            SITE_NAME: 'SveltyCMS Test Site',
+            PASSWORD_LENGTH: 8,
+            DEFAULT_CONTENT_LANGUAGE: 'en',
+            AVAILABLE_CONTENT_LANGUAGES: ['en', 'de'],
+            BASE_LOCALE: 'en',
+            LOCALES: ['en', 'de'],
+            MEDIA_FOLDER: 'ci-media-files',
+            MEDIA_OUTPUT_FORMAT_QUALITY: { format: 'webp', quality: 75 },
+            IMAGE_SIZES: { thumbnail: 150, card: 600 },
+            MAX_FILE_SIZE: 10485760,
+            BODY_SIZE_LIMIT: 104857600,
+            USE_ARCHIVE_ON_DELETE: true,
+            HOST_DEV: 'http://localhost:4173',
+            HOST_PROD: 'http://localhost:4173',
+            LOG_LEVELS: ['info', 'error', 'warn'],
+            LOG_RETENTION_DAYS: 7,
+            LOG_ROTATION_SIZE: 5242880,
+            SEASONS: false,
+            DEMO: true
+          };
+          EOF
           
-          # Enable demo mode for CI
-          sed -i "s|DEMO: false|DEMO: true|g" config/public.ts
+          # Create CI-optimized private.ts config (standalone, no imports)
+          cat > config/private.ts << 'EOF'
+          export const privateEnv = {
+            DB_TYPE: 'mongodb',
+            DB_HOST: 'localhost',
+            DB_PORT: 27017,
+            DB_NAME: 'SveltyCMS',
+            DB_USER: 'admin',
+            DB_PASSWORD: 'admin',
+            DB_RETRY_ATTEMPTS: 3,
+            DB_RETRY_DELAY: 1000,
+            DB_POOL_SIZE: 5,
+            MULTI_TENANT: false,
+            SMTP_HOST: '',
+            SMTP_PORT: 587,
+            SMTP_EMAIL: '',
+            SMTP_PASSWORD: '',
+            SERVER_PORT: 4173,
+            USE_REDIS: false,
+            SESSION_CLEANUP_INTERVAL: 60000,
+            MAX_IN_MEMORY_SESSIONS: 1000,
+            DB_VALIDATION_PROBABILITY: 0.1,
+            SESSION_EXPIRATION_SECONDS: 86400,
+            USE_GOOGLE_OAUTH: true,
+            GOOGLE_CLIENT_ID: '123456789-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com',
+            GOOGLE_CLIENT_SECRET: 'GOCSPX-test_client_secret_for_github_actions',
+            USE_MAPBOX: false,
+            USE_TIKTOK: false,
+            LLM_APIS: {},
+            JWT_SECRET_KEY: 'testsecret',
+            USE_2FA: false,
+            TWO_FACTOR_AUTH_BACKUP_CODES_COUNT: 10,
+            ROLES: ['admin', 'editor'],
+            PERMISSIONS: ['create', 'read', 'update', 'delete']
+          };
+          EOF
 
       - name: Run local server
         run: |
@@ -223,7 +277,7 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Setup SvelteKit configuration (Keep existing configs)
+      - name: Setup SvelteKit configuration (Fixed - No TypeScript imports)
         run: |
           # Create .svelte-kit directory if it doesn't exist
           mkdir -p .svelte-kit
@@ -252,19 +306,73 @@ jobs:
           }
           EOF
           
-          # Update your existing config files for CI environment
-          # We'll only update the values that need to change for CI, not overwrite the entire structure
+          # Create CI-compatible config files (remove TypeScript imports that cause issues in CI)
           
-          # Update HOST_DEV and HOST_PROD to use port 4173 for CI
-          sed -i "s|http://localhost:5173|http://localhost:4173|g" config/public.ts
+          # Backup original files
+          cp config/public.ts config/public.ts.original
+          cp config/private.ts config/private.ts.original
           
-          # Update database settings for CI
-          sed -i "s|mongodb://localhost|localhost|g" config/private.ts
-          sed -i "s|DB_USER: 'root'|DB_USER: 'admin'|g" config/private.ts
-          sed -i "s|DB_PASSWORD: 'password'|DB_PASSWORD: 'admin'|g" config/private.ts
+          # Create CI-optimized public.ts config (standalone, no imports)
+          cat > config/public.ts << 'EOF'
+          export const publicEnv = {
+            SITE_NAME: 'SveltyCMS Test Site',
+            PASSWORD_LENGTH: 8,
+            DEFAULT_CONTENT_LANGUAGE: 'en',
+            AVAILABLE_CONTENT_LANGUAGES: ['en', 'de'],
+            BASE_LOCALE: 'en',
+            LOCALES: ['en', 'de'],
+            MEDIA_FOLDER: 'ci-media-files',
+            MEDIA_OUTPUT_FORMAT_QUALITY: { format: 'webp', quality: 75 },
+            IMAGE_SIZES: { thumbnail: 150, card: 600 },
+            MAX_FILE_SIZE: 10485760,
+            BODY_SIZE_LIMIT: 104857600,
+            USE_ARCHIVE_ON_DELETE: true,
+            HOST_DEV: 'http://localhost:4173',
+            HOST_PROD: 'http://localhost:4173',
+            LOG_LEVELS: ['info', 'error', 'warn'],
+            LOG_RETENTION_DAYS: 7,
+            LOG_ROTATION_SIZE: 5242880,
+            SEASONS: false,
+            DEMO: true
+          };
+          EOF
           
-          # Enable demo mode for CI
-          sed -i "s|DEMO: false|DEMO: true|g" config/public.ts
+          # Create CI-optimized private.ts config (standalone, no imports)
+          cat > config/private.ts << 'EOF'
+          export const privateEnv = {
+            DB_TYPE: 'mongodb',
+            DB_HOST: 'localhost',
+            DB_PORT: 27017,
+            DB_NAME: 'SveltyCMS',
+            DB_USER: 'admin',
+            DB_PASSWORD: 'admin',
+            DB_RETRY_ATTEMPTS: 3,
+            DB_RETRY_DELAY: 1000,
+            DB_POOL_SIZE: 5,
+            MULTI_TENANT: false,
+            SMTP_HOST: '',
+            SMTP_PORT: 587,
+            SMTP_EMAIL: '',
+            SMTP_PASSWORD: '',
+            SERVER_PORT: 4173,
+            USE_REDIS: false,
+            SESSION_CLEANUP_INTERVAL: 60000,
+            MAX_IN_MEMORY_SESSIONS: 1000,
+            DB_VALIDATION_PROBABILITY: 0.1,
+            SESSION_EXPIRATION_SECONDS: 86400,
+            USE_GOOGLE_OAUTH: true,
+            GOOGLE_CLIENT_ID: '123456789-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com',
+            GOOGLE_CLIENT_SECRET: 'GOCSPX-test_client_secret_for_github_actions',
+            USE_MAPBOX: false,
+            USE_TIKTOK: false,
+            LLM_APIS: {},
+            JWT_SECRET_KEY: 'testsecret',
+            USE_2FA: false,
+            TWO_FACTOR_AUTH_BACKUP_CODES_COUNT: 10,
+            ROLES: ['admin', 'editor'],
+            PERMISSIONS: ['create', 'read', 'update', 'delete']
+          };
+          EOF
 
       - name: Run local server
         run: |
