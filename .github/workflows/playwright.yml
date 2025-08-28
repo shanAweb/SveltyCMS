@@ -37,8 +37,7 @@ jobs:
     - name: Install TypeScript and ts-node for CI
       run: |
         echo "Installing TypeScript and ts-node for CI environment..."
-        npm install -g typescript ts-node
-        npm install --save-dev typescript ts-node @types/node
+        npm install -g typescript ts-node --legacy-peer-deps
         echo "✅ TypeScript and ts-node installed successfully"
         echo "TypeScript version: $(tsc --version)"
         echo "ts-node version: $(ts-node --version)"
@@ -90,7 +89,66 @@ jobs:
         }
         EOF
         
+        # Create backup JavaScript config files in case ts-node fails
+        cat > config/public.js.backup << 'EOF'
+        export const publicEnv = {
+            SITE_NAME: 'SveltyCMS',
+            PASSWORD_LENGTH: 8,
+            DEFAULT_CONTENT_LANGUAGE: 'en',
+            AVAILABLE_CONTENT_LANGUAGES: ["en", "de"],
+            BASE_LOCALE: 'en',
+            LOCALES: ["en", "de", "fr", "es"],
+            MEDIA_FOLDER: 'mediaFiles',
+            MEDIA_OUTPUT_FORMAT_QUALITY: { format: 'avif', quality: 80 },
+            IMAGE_SIZES: { "sm": 600, "md": 900, "lg": 1200 },
+            MAX_FILE_SIZE: 104857600,
+            BODY_SIZE_LIMIT: 1048576,
+            USE_ARCHIVE_ON_DELETE: true,
+            HOST_DEV: 'http://localhost:4173',
+            HOST_PROD: 'http://localhost:4173',
+            LOG_LEVELS: ["error"],
+            LOG_RETENTION_DAYS: 2,
+            LOG_ROTATION_SIZE: 5242880,
+            SEASONS: false,
+            DEMO: false,
+        };
+        EOF
+        
+        cat > config/private.js.backup << 'EOF'
+        export const privateEnv = {
+            DB_TYPE: 'mongodb',
+            DB_HOST: 'mongodb://localhost',
+            DB_PORT: 27017,
+            DB_NAME: 'SveltyCMS',
+            DB_USER: 'root',
+            DB_PASSWORD: 'password',
+            DB_RETRY_ATTEMPTS: 3,
+            DB_RETRY_DELAY: 3000,
+            DB_POOL_SIZE: 5,
+            MULTI_TENANT: false,
+            SMTP_HOST: 'dummy.email.service',
+            SMTP_PORT: 25,
+            SMTP_EMAIL: 'dev@localhost.com',
+            SMTP_PASSWORD: 'dummy_password',
+            USE_REDIS: false,
+            SESSION_CLEANUP_INTERVAL: 60000,
+            MAX_IN_MEMORY_SESSIONS: 10000,
+            DB_VALIDATION_PROBABILITY: 0.1,
+            SESSION_EXPIRATION_SECONDS: 3600,
+            USE_GOOGLE_OAUTH: false,
+            USE_MAPBOX: false,
+            USE_TIKTOK: false,
+            LLM_APIS: {},
+            JWT_SECRET_KEY: 'e98eb41c117ed38f73a45b00a1d97803369cc1246c1c836bb344a48207aeea63',
+            USE_2FA: false,
+            TWO_FACTOR_AUTH_BACKUP_CODES_COUNT: 10,
+            ROLES: ["admin", "editor"],
+            PERMISSIONS: ["manage", "edit", "create"],
+        };
+        EOF
+        
         echo "✅ TypeScript configuration created for CI"
+        echo "✅ Backup JavaScript config files created"
         echo "📁 Config directory contents:"
         ls -la config/
         
@@ -103,11 +161,31 @@ jobs:
         # Use ts-node to run the build process with proper TypeScript support
         NODE_OPTIONS="--loader ts-node/esm" bun run build
         if [ $? -ne 0 ]; then
-          echo "Build failed. Checking config files..."
+          echo "❌ ts-node build failed, trying JavaScript fallback approach..."
+          echo "Replacing TypeScript config files with JavaScript versions..."
+          
+          # Backup original TypeScript files
+          cp config/public.ts config/public.ts.original
+          cp config/private.ts config/private.ts.original
+          
+          # Replace with JavaScript versions
+          cp config/public.js.backup config/public.ts
+          cp config/private.js.backup config/private.ts
+          
+          echo "✅ Config files replaced with JavaScript versions"
+          echo "📁 Config directory contents:"
           ls -la config/
-          cat config/public.ts
-          cat config/private.ts
-          exit 1
+          
+          # Try build again with JavaScript configs
+          echo "🔄 Retrying build with JavaScript config files..."
+          bun run build
+          if [ $? -ne 0 ]; then
+            echo "❌ JavaScript fallback also failed. Checking config files..."
+            ls -la config/
+            cat config/public.ts
+            cat config/private.ts
+            exit 1
+          fi
         fi
 
     - name: Start preview server
@@ -152,7 +230,24 @@ jobs:
     - name: Restore original config files
       if: always()
       run: |
-        echo "✅ No config files were modified - original files preserved"
+        echo "🔄 Restoring original TypeScript config files..."
+        
+        # If we used the JavaScript fallback, restore from .original backup
+        if [ -f config/public.ts.original ]; then
+          mv config/public.ts.original config/public.ts
+          echo "✅ Restored public.ts from original backup"
+        fi
+        
+        if [ -f config/private.ts.original ]; then
+          mv config/private.ts.original config/private.ts
+          echo "✅ Restored private.ts from original backup"
+        fi
+        
+        # Clean up backup files
+        rm -f config/public.js.backup config/private.js.backup
+        rm -f config/public.ts.original config/private.ts.original
+        
+        echo "✅ Original TypeScript config files restored and cleanup completed"
 
     - name: Upload Playwright test results
       if: matrix.test
