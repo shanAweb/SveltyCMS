@@ -67,8 +67,8 @@ jobs:
         cp config/public.ts config/public.ts.backup
         cp config/private.ts config/private.ts.backup
         
-        # Convert config/public.ts to plain JavaScript by removing imports and converting to direct export
-        cat > config/public.ts << 'EOF'
+        # Create JavaScript versions of config files (with .js extension)
+        cat > config/public.js << 'EOF'
         /**
          * CI-specific public configuration (converted from TypeScript)
          */
@@ -126,8 +126,8 @@ jobs:
         };
         EOF
         
-        # Convert config/private.ts to plain JavaScript by removing imports and converting to direct export
-        cat > config/private.ts << 'EOF'
+        # Create JavaScript versions of config files (with .js extension)
+        cat > config/private.js << 'EOF'
         /**
          * CI-specific private configuration (converted from TypeScript)
          */
@@ -189,6 +189,11 @@ jobs:
             ],
         };
         EOF
+        
+        # Remove the original .ts files and rename .js files to replace them
+        rm config/public.ts config/private.ts
+        mv config/public.js config/public.ts
+        mv config/private.js config/private.ts
         
         echo "✅ Config files converted to JavaScript successfully"
         echo "📁 Config directory contents:"
@@ -264,7 +269,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: playwright-results-${{ matrix.test }}
-        path: test-results/playwright/
+        path: test-results/playwright/?
         retention-days: 30
 
     - name: Upload Bun test results
