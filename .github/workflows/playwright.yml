@@ -177,9 +177,9 @@ jobs:
       run: |
         echo "Building SvelteCMS with TypeScript support..."
         
-        # First, try to build with ts-node
+        # First, try to build with ts-node directly
         echo "🔄 Attempting build with ts-node..."
-        if NODE_OPTIONS="--loader ts-node/esm" bun run vite build; then
+        if ts-node --project tsconfig.ci.json --esm --experimental-specifier-resolution=node node_modules/.bin/vite build; then
           echo "✅ Build succeeded with ts-node!"
         else
           echo "❌ ts-node build failed, switching to JavaScript fallback approach..."
