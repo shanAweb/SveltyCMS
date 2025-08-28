@@ -67,8 +67,8 @@ jobs:
         cp config/public.ts config/public.ts.backup
         cp config/private.ts config/private.ts.backup
         
-        # Create JavaScript versions of config files (with .js extension)
-        cat > config/public.js << 'EOF'
+        # Create JavaScript content in .ts files (Vite expects these exact names)
+        cat > config/public.ts << 'EOF'
         /**
          * CI-specific public configuration (converted from TypeScript)
          */
@@ -126,8 +126,8 @@ jobs:
         };
         EOF
         
-        # Create JavaScript versions of config files (with .js extension)
-        cat > config/private.js << 'EOF'
+        # Create JavaScript content in .ts files (Vite expects these exact names)
+        cat > config/private.ts << 'EOF'
         /**
          * CI-specific private configuration (converted from TypeScript)
          */
@@ -190,16 +190,18 @@ jobs:
         };
         EOF
         
-        # Remove the original .ts files and keep the .js files
-        rm config/public.ts config/private.ts
-        
-        echo "✅ Config files converted to JavaScript successfully"
+        echo "✅ Config files created with JavaScript content successfully"
         echo "📁 Config directory contents:"
         ls -la config/
         echo "📄 Public config content:"
-        head -20 config/public.js
+        head -20 config/public.ts
         echo "📄 Private config content:"
-        head -20 config/private.js
+        head -20 config/private.ts
+        
+        # Rename .ts files to .js so Node.js can process them
+        mv config/public.ts config/public.js
+        mv config/private.ts config/private.js
+        echo "✅ Files renamed to .js for Node.js processing"
 
     - name: Build application with CI config
       run: |
@@ -255,6 +257,15 @@ jobs:
     - name: Restore original config files
       if: always()
       run: |
+        # First rename .js files back to .ts if they exist
+        if [ -f config/public.js ]; then
+          mv config/public.js config/public.ts
+        fi
+        if [ -f config/private.js ]; then
+          mv config/private.js config/private.ts
+        fi
+        
+        # Then restore original files from backup
         if [ -f config/public.ts.backup ]; then
           mv config/public.ts.backup config/public.ts
         fi
