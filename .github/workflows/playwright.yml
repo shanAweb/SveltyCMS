@@ -173,45 +173,31 @@ jobs:
         echo "📄 Backup files available:"
         ls -la config/*.backup 2>/dev/null || echo "No backup files found"
 
-    - name: Build application with TypeScript support
+    - name: Build application with JavaScript fallback
       run: |
-        echo "Building SvelteCMS with TypeScript support..."
+        echo "Building SvelteCMS using JavaScript fallback for configs..."
         
-        # First, try to build with ts-node directly
-        echo "🔄 Attempting build with ts-node..."
-        if ts-node --project tsconfig.ci.json --esm --experimental-specifier-resolution=node node_modules/.bin/vite build; then
-          echo "✅ Build succeeded with ts-node!"
+        # Backup original TypeScript files (optional, but good practice)
+        cp config/public.ts config/public.ts.original
+        cp config/private.ts config/private.ts.original
+        
+        # Replace with JavaScript versions
+        cp config/public.js.backup config/public.ts
+        cp config/private.js.backup config/private.ts
+        
+        echo "✅ Config files replaced with JavaScript versions"
+        echo "📁 Config directory contents:"
+        ls -la config/
+        
+        # Try build with JavaScript configs
+        echo "🔄 Starting build with JavaScript config files..."
+        if bun run vite build; then
+          echo "✅ Build succeeded with JavaScript fallback!"
         else
-          echo "❌ ts-node build failed, switching to JavaScript fallback approach..."
-          
-          # Backup original TypeScript files
-          cp config/public.ts config/public.ts.original
-          cp config/private.ts config/private.ts.original
-          
-          # Replace with JavaScript versions
-          cp config/public.js.backup config/public.ts
-          cp config/private.js.backup config/private.ts
-          
-          echo "✅ Config files replaced with JavaScript versions"
-          echo "📁 Config directory contents:"
+          echo "❌ Build with JavaScript fallback failed."
+          echo "📁 Final config directory contents:"
           ls -la config/
-          echo "📄 Public config content (first 10 lines):"
-          head -10 config/public.ts
-          
-          # Try build again with JavaScript configs
-          echo "🔄 Retrying build with JavaScript config files..."
-          if bun run vite build; then
-            echo "✅ Build succeeded with JavaScript fallback!"
-          else
-            echo "❌ JavaScript fallback also failed. Final attempt with direct file check..."
-            echo "📁 Final config directory contents:"
-            ls -la config/
-            echo "📄 Public config final content:"
-            cat config/public.ts
-            echo "📄 Private config final content:"
-            cat config/private.ts
-            exit 1
-          fi
+          exit 1
         fi
 
     - name: Start preview server
