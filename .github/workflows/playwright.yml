@@ -1,350 +1,266 @@
-name: Playwright and Bun Tests (ts-node approach)
+name: Playwright and Bun Tests (Direct Config Approach)
 
-# Trigger on pushes to main and next, and on Pull Requests to main
 on:
   push:
-    branches:
-      - main
-      - next
+    branches: [ main, develop ]
   pull_request:
-    branches:
-      - main
-  workflow_dispatch: {}
+    branches: [ main, develop ]
 
 jobs:
   test:
-    name: SveltyCMS Playwright Tests
     timeout-minutes: 60
-    runs-on: ubuntu-latest
-
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        mongodb-version: [latest]
-        test-file: ['tests/playwright/signupfirstuser.spec.ts', 'tests/playwright/user.spec.ts', 'tests/playwright/oauth-signup-firstuser.spec.ts']
+        # Playwright tests
+        test: [tests/playwright/user.spec.ts, tests/playwright/signupfirstuser.spec.ts, tests/playwright/oauth-signup-firstuser.spec.ts]
+        # Bun tests
+        bun: [bun-tests]
 
-    steps:
-      - name: Git checkout
-        id: checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        id: setup-bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Cache Bun dependencies and Playwright browsers
-        id: cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.bun/install/cache
-            ~/.cache/ms-playwright
-          key: ${{ runner.OS }}-bun-playwright-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: |
-            ${{ runner.OS }}-bun-playwright-
-        continue-on-error: true
-
-      - name: Start MongoDB v${{ matrix.mongodb-version }}
-        id: mongodb
-        uses: supercharge/mongodb-github-action@1.10.0
-        with:
-          mongodb-version: ${{ matrix.mongodb-version }}
-          mongodb-username: admin
-          mongodb-password: admin
-          mongodb-db: SveltyCMS
-          mongodb-port: 27017
-        if: ${{ github.event_name != 'pull_request' }}
-
-      - name: Install dependencies
-        id: install
-        run: bun install
-
-      - name: Install Playwright Browsers
-        id: install-playwright
-        run: bunx playwright install --with-deps
-
-      - name: Setup SvelteKit configuration for CI (Using ts-node approach)
-        run: |
-          # Create .svelte-kit directory if it doesn't exist
-          mkdir -p .svelte-kit
-          
-          # Create basic tsconfig.json for .svelte-kit (without circular dependency)
-          cat > .svelte-kit/tsconfig.json << 'EOF'
-          {
-            "compilerOptions": {
-              "allowJs": true,
-              "checkJs": true,
-              "esModuleInterop": true,
-              "forceConsistentCasingInFileNames": true,
-              "resolveJsonModule": true,
-              "skipLibCheck": true,
-              "strict": true,
-              "moduleResolution": "bundler",
-              "target": "ESNext",
-              "module": "ESNext",
-              "isolatedModules": true,
-              "verbatimModuleSyntax": true,
-              "sourceMap": true,
-              "noErrorTruncation": true,
-              "noUnusedLocals": true,
-              "noUnusedParameters": true
-            }
-          }
-          EOF
-          
-          # Install ts-node globally for TypeScript support in CI
-          npm install -g ts-node
-          
-          # Create a CI-specific tsconfig that works with ts-node
-          cat > tsconfig.ci.json << 'EOF'
-          {
-            "extends": "./tsconfig.json",
-            "compilerOptions": {
-              "module": "ESNext",
-              "moduleResolution": "node",
-              "esModuleInterop": true,
-              "allowSyntheticDefaultImports": true,
-              "target": "ESNext"
-            },
-            "ts-node": {
-              "esm": true,
-              "experimentalSpecifierResolution": "node"
-            }
-          }
-          EOF
-          
-          # Keep original config files but ensure they work with ts-node
-          # The key is that ts-node can now handle the TypeScript imports properly
-
-      - name: Build application with ts-node support
-        run: |
-          echo "Building SvelteCMS with ts-node support..."
-          # Use ts-node to run the build process
-          NODE_OPTIONS="--loader ts-node/esm" bun run build
-          if [ $? -ne 0 ]; then
-            echo "Build failed. Checking config files..."
-            ls -la config/
-            cat config/public.ts
-            cat config/private.ts
-            exit 1
-          fi
-
-      - name: Start preview server
-        run: |
-          echo "Starting preview server on port 4173..."
-          bun run preview --port 4173 &
-          SERVER_PID=$!
-          echo $SERVER_PID > server.pid
-          echo "Server PID: $SERVER_PID"
-
-      - name: Wait for server to be ready
-        run: |
-          echo "Waiting for server to be ready..."
-          timeout 60s bash -c 'until curl -f http://localhost:4173 >/dev/null 2>&1; do echo "Waiting for server ($(date))..."; sleep 5; done'
-          echo "Server is ready!"
-          curl -I http://localhost:4173 || echo "Server health check failed"
-
-      - name: Run Playwright tests
-        run: |
-          mkdir -p test-results/playwright
-          echo "Running test: ${{ matrix.test-file }}"
-          bunx playwright test ${{ matrix.test-file }} --workers 1 --output=test-results/playwright
-        env:
-          DB_TYPE: 'mongodb'
-          DB_HOST: 'localhost'
-          DB_PORT: '27017'
-          DB_NAME: 'SveltyCMS'
-          DB_USER: 'admin'
-          DB_PASSWORD: 'admin'
-          DB_RETRY_DELAY: '1000'
-          DB_RETRY_ATTEMPTS: '3'
-          DB_POOL_SIZE: '5'
-          MULTI_TENANT: 'false'
-          SMTP_HOST: ''
-          SMTP_PORT: '587'
-          SMTP_EMAIL: ''
-          SMTP_PASSWORD: ''
-          SERVER_PORT: '4173'
-          USE_GOOGLE_OAUTH: 'true'
-          GOOGLE_CLIENT_ID: '123456789-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com'
-          GOOGLE_CLIENT_SECRET: 'GOCSPX-test_client_secret_for_github_actions'
-          USE_REDIS: 'false'
-          REDIS_HOST: ''
-          REDIS_PORT: ''
-          REDIS_PASSWORD: ''
-          SESSION_CLEANUP_INTERVAL: '60000'
-          MAX_IN_MEMORY_SESSIONS: '1000'
-          DB_VALIDATION_PROBABILITY: '0.1'
-          SESSION_EXPIRATION_SECONDS: '86400'
-          USE_MAPBOX: 'false'
-          MAPBOX_API_TOKEN: ''
-          SECRET_MAPBOX_API_TOKEN: ''
-          GOOGLE_API_KEY: ''
-          TWITCH_TOKEN: ''
-          USE_TIKTOK: 'false'
-          TIKTOK_TOKEN: ''
-          LLM_APIS: '{}'
-          ROLES: '["admin", "editor"]'
-          PERMISSIONS: '["create", "read", "update", "delete"]'
-          JWT_SECRET_KEY: 'testsecret'
-          USE_2FA: 'false'
-          TWO_FACTOR_AUTH_SECRET: ''
-          TWO_FACTOR_AUTH_BACKUP_CODES_COUNT: '10'
-          HOST_DEV: 'http://localhost:4173'
-          HOST_PROD: 'http://localhost:4173'
-          SITE_NAME: 'SveltyCMS Test Site'
-          PASSWORD_LENGTH: '8'
-          DEFAULT_CONTENT_LANGUAGE: 'en'
-          AVAILABLE_CONTENT_LANGUAGES: '["en", "de", "es"]'
-          BASE_LOCALE: 'en'
-          LOCALES: '["en", "de"]'
-          MEDIA_FOLDER: 'ci-media-files'
-          MEDIA_OUTPUT_FORMAT_QUALITY: '{"format": "webp", "quality": 75}'
-          MEDIASERVER_URL: ''
-          IMAGE_SIZES: '{"thumbnail": 150, "card": 600}'
-          MAX_FILE_SIZE: '10485760'
-          BODY_SIZE_LIMIT: '104857600'
-          EXTRACT_DATA_PATH: ''
-          USE_ARCHIVE_ON_DELETE: 'true'
-          SEASONS: 'false'
-          SEASON_REGION: ''
-          PKG_VERSION: 'ci-test-version'
-          LOG_LEVELS: '["info", "error", "warn"]'
-          LOG_RETENTION_DAYS: '7'
-          LOG_ROTATION_SIZE: '5242880'
-          DEMO: 'true'
-          API_BASE_URL: 'http://localhost:4173'
-
-      - name: Cleanup server
-        if: always()
-        run: |
-          SERVER_PID=$(cat server.pid 2>/dev/null || echo "")
-          if [ ! -z "$SERVER_PID" ]; then
-            echo "Stopping server with PID: $SERVER_PID"
-            kill $SERVER_PID 2>/dev/null || true
-            wait $SERVER_PID 2>/dev/null || true
-            echo "Server stopped"
-          fi
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-test-results-${{ strategy.job-index }}
-          path: test-results/playwright/
-          retention-days: 30
-
-  bun-tests:
-    name: SveltyCMS Bun Tests
     runs-on: ubuntu-latest
-
     steps:
-      - name: Git checkout
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
-      - name: Install dependencies
-        run: bun install
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
 
-      - name: Setup SvelteKit configuration for CI (Using ts-node approach)
-        run: |
-          # Create .svelte-kit directory if it doesn't exist
-          mkdir -p .svelte-kit
-          
-          # Create basic tsconfig.json for .svelte-kit (without circular dependency)
-          cat > .svelte-kit/tsconfig.json << 'EOF'
-          {
-            "compilerOptions": {
-              "allowJs": true,
-              "checkJs": true,
-              "esModuleInterop": true,
-              "forceConsistentCasingInFileNames": true,
-              "resolveJsonModule": true,
-              "skipLibCheck": true,
-              "strict": true,
-              "moduleResolution": "bundler",
-              "target": "ESNext",
-              "module": "ESNext",
-              "isolatedModules": true,
-              "verbatimModuleSyntax": true,
-              "sourceMap": true,
-              "noErrorTruncation": true,
-              "noUnusedLocals": true,
-              "noUnusedParameters": true
-            }
+    - name: Install dependencies
+      run: bun install
+
+    - name: Setup SvelteKit configuration for CI (Direct Config Approach)
+      run: |
+        # Create .svelte-kit directory if it doesn't exist
+        mkdir -p .svelte-kit
+        
+        # Create basic tsconfig.json for .svelte-kit (without circular dependency)
+        cat > .svelte-kit/tsconfig.json << 'EOF'
+        {
+          "compilerOptions": {
+            "allowJs": true,
+            "checkJs": true,
+            "esModuleInterop": true,
+            "forceConsistentCasingInFileNames": true,
+            "resolveJsonModule": true,
+            "skipLibCheck": true,
+            "strict": true,
+            "moduleResolution": "bundler",
+            "target": "ESNext",
+            "module": "ESNext",
+            "isolatedModules": true,
+            "verbatimModuleSyntax": true,
+            "sourceMap": true,
+            "noErrorTruncation": true,
+            "noUnusedLocals": true,
+            "noUnusedParameters": true
           }
-          EOF
-          
-          # Install ts-node globally for TypeScript support in CI
-          npm install -g ts-node
-          
-          # Create a CI-specific tsconfig that works with ts-node
-          cat > tsconfig.ci.json << 'EOF'
-          {
-            "extends": "./tsconfig.json",
-            "compilerOptions": {
-              "module": "ESNext",
-              "moduleResolution": "node",
-              "esModuleInterop": true,
-              "allowSyntheticDefaultImports": true,
-              "target": "ESNext"
+        }
+        EOF
+        
+        # Create CI-specific config files that work without TypeScript imports
+        # Create config/public.ci.js (plain JavaScript)
+        cat > config/public.ci.js << 'EOF'
+        export const publicEnv = {
+            // --- Site Configuration ---
+            SITE_NAME: 'SveltyCMS',
+            PASSWORD_LENGTH: 8,
+
+            // --- Language Configuration ---
+            DEFAULT_CONTENT_LANGUAGE: 'en',
+            AVAILABLE_CONTENT_LANGUAGES: [
+                "en",
+                "de"
+            ],
+            BASE_LOCALE: 'en',
+            LOCALES: [
+                "en",
+                "de",
+                "fr",
+                "es"
+            ],
+
+            // --- Media Configuration ---
+            MEDIA_FOLDER: 'mediaFiles',
+            MEDIA_OUTPUT_FORMAT_QUALITY: {
+                format: 'avif',
+                quality: 80
             },
-            "ts-node": {
-              "esm": true,
-              "experimentalSpecifierResolution": "node"
-            }
-          }
-          EOF
-          
-          # Keep original config files but ensure they work with ts-node
-          # The key is that ts-node can now handle the TypeScript imports properly
+            IMAGE_SIZES: {
+                "sm": 600,
+                "md": 900,
+                "lg": 1200
+            },
+            MAX_FILE_SIZE: 104857600,
+            BODY_SIZE_LIMIT: 1048576,
+            USE_ARCHIVE_ON_DELETE: true,
 
-      - name: Build application with ts-node support
-        run: |
-          echo "Building SvelteCMS for Bun tests with ts-node support..."
-          # Use ts-node to run the build process
-          NODE_OPTIONS="--loader ts-node/esm" bun run build
+            // --- Host Configuration ---
+            HOST_DEV: 'http://localhost:4173',
+            HOST_PROD: 'http://localhost:4173',
 
-      - name: Start preview server
-        run: |
-          echo "Starting preview server for Bun tests..."
-          bun run preview --port 4173 &
-          echo $! > server.pid
-          sleep 5
+            // --- Logging ---
+            LOG_LEVELS: [
+                "error"
+            ],
+            LOG_RETENTION_DAYS: 2,
+            LOG_ROTATION_SIZE: 5242880,
 
-      - name: Wait for server to be ready
-        run: |
-          timeout 60s bash -c 'until curl -f http://localhost:4173 >/dev/null 2>&1; do echo "Waiting for server..."; sleep 5; done'
-          echo "Server is ready for Bun tests!"
+            // --- Theming ---
+            SEASONS: false,
 
-      - name: Run Bun tests
-        run: |
-          mkdir -p test-results/bun
-          echo "Running Bun tests..."
-          bun test tests/bun --output-file test-results/bun/test-results.txt
-          TEST_EXIT_CODE=$?
-          
-          echo "Stopping server..."
-          SERVER_PID=$(cat server.pid 2>/dev/null || echo "")
-          if [ ! -z "$SERVER_PID" ]; then
-            kill $SERVER_PID 2>/dev/null || true
-            wait $SERVER_PID 2>/dev/null || true
-          fi
-          
-          exit $TEST_EXIT_CODE
-        env:
-          API_BASE_URL: 'http://localhost:4173'
+            // --- Demo Mode ---
+            DEMO: false,
+        };
+        EOF
+        
+        # Create config/private.ci.js (plain JavaScript)
+        cat > config/private.ci.js << 'EOF'
+        export const privateEnv = {
+            // --- Database Configuration ---
+            DB_TYPE: 'mongodb',
+            DB_HOST: 'mongodb://localhost',
+            DB_PORT: 27017,
+            DB_NAME: 'SveltyCMS',
+            DB_USER: 'root',
+            DB_PASSWORD: 'password',
+            DB_RETRY_ATTEMPTS: 3,
+            DB_RETRY_DELAY: 3000,
+            DB_POOL_SIZE: 5,
+            MULTI_TENANT: false,
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: bun-test-results
-          path: test-results/bun/
-          retention-days: 30
+            // --- SMTP Configuration ---
+            SMTP_HOST: 'dummy.email.service',
+            SMTP_PORT: 25,
+            SMTP_EMAIL: 'dev@localhost.com',
+            SMTP_PASSWORD: 'dummy_password',
+
+            // --- Redis Caching ---
+            USE_REDIS: false,
+
+            // --- Session Management ---
+            SESSION_CLEANUP_INTERVAL: 60000,
+            MAX_IN_MEMORY_SESSIONS: 10000,
+            DB_VALIDATION_PROBABILITY: 0.1,
+            SESSION_EXPIRATION_SECONDS: 3600,
+
+            // --- Google OAuth ---
+            USE_GOOGLE_OAUTH: false,
+
+            // --- Other APIs ---
+            USE_MAPBOX: false,
+            USE_TIKTOK: false,
+
+            // --- LLM APIs ---
+            LLM_APIS: {},
+
+            // --- JWT Secret ---
+            JWT_SECRET_KEY: 'e98eb41c117ed38f73a45b00a1d97803369cc1246c1c836bb344a48207aeea63',
+
+            // --- Two-Factor Authentication ---
+            USE_2FA: false,
+            TWO_FACTOR_AUTH_BACKUP_CODES_COUNT: 10,
+
+            // --- Roles & Permissions ---
+            ROLES: [
+                "admin",
+                "editor"
+            ],
+            PERMISSIONS: [
+                "manage",
+                "edit",
+                "create"
+            ],
+        };
+        EOF
+        
+        # Backup original config files and replace with CI versions
+        cp config/public.ts config/public.ts.backup
+        cp config/private.ts config/private.ts.backup
+        cp config/public.ci.js config/public.ts
+        cp config/private.ci.js config/private.ts
+        
+        # Remove the .ci.js files
+        rm config/public.ci.js config/private.ci.js
+
+    - name: Build application with CI config
+      run: |
+        echo "Building SvelteCMS with CI-specific config..."
+        bun run build
+        if [ $? -ne 0 ]; then
+          echo "Build failed. Checking config files..."
+          ls -la config/
+          cat config/public.ts
+          cat config/private.ts
+          exit 1
+        fi
+
+    - name: Start preview server
+      run: |
+        echo "Starting preview server..."
+        bun run vite preview --port "4173" &
+        echo $! > server.pid
+        sleep 5
+
+    - name: Wait for server to be ready
+      run: |
+        timeout 30s bash -c 'until curl -f http://localhost:4173 >/dev/null 2>&1; do echo "Waiting for server..."; sleep 3; done'
+
+    - name: Run Playwright tests
+      if: matrix.test
+      env:
+        API_BASE_URL: 'http://localhost:4173'
+      run: |
+        echo "Running Playwright test: ${{ matrix.test }}"
+        npx playwright test ${{ matrix.test }} --workers 1
+        echo "Playwright test completed: ${{ matrix.test }}"
+
+    - name: Run Bun tests
+      if: matrix.bun
+      env:
+        API_BASE_URL: 'http://localhost:4173'
+      run: |
+        echo "Running Bun tests..."
+        mkdir -p test-results/bun
+        bun test tests/bun --output-file test-results/bun/test-results.txt
+        echo "Bun tests completed"
+
+    - name: Stop preview server
+      if: always()
+      run: |
+        if [ -f server.pid ]; then
+          echo "Stopping preview server..."
+          kill $(cat server.pid) || true
+          rm server.pid
+        fi
+
+    - name: Restore original config files
+      if: always()
+      run: |
+        if [ -f config/public.ts.backup ]; then
+          mv config/public.ts.backup config/public.ts
+        fi
+        if [ -f config/private.ts.backup ]; then
+          mv config/private.ts.backup config/private.ts
+        fi
+
+    - name: Upload Playwright test results
+      if: matrix.test
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-results-${{ matrix.test }}
+        path: test-results/playwright/
+        retention-days: 30
+
+    - name: Upload Bun test results
+      if: matrix.bun
+      uses: actions/upload-artifact@v4
+      with:
+        name: bun-test-results
+        path: test-results/bun/
+        retention-days: 30
