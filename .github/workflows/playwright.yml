@@ -63,9 +63,16 @@ jobs:
         }
         EOF
         
-        # Create CI-specific config files that work without TypeScript imports
-        # Create config/public.ci.js (plain JavaScript)
-        cat > config/public.ci.js << 'EOF'
+        # Backup original config files
+        cp config/public.ts config/public.ts.backup
+        cp config/private.ts config/private.ts.backup
+        
+        # Convert config/public.ts to plain JavaScript by removing imports and converting to direct export
+        cat > config/public.ts << 'EOF'
+        /**
+         * CI-specific public configuration (converted from TypeScript)
+         */
+        
         export const publicEnv = {
             // --- Site Configuration ---
             SITE_NAME: 'SveltyCMS',
@@ -119,8 +126,12 @@ jobs:
         };
         EOF
         
-        # Create config/private.ci.js (plain JavaScript)
-        cat > config/private.ci.js << 'EOF'
+        # Convert config/private.ts to plain JavaScript by removing imports and converting to direct export
+        cat > config/private.ts << 'EOF'
+        /**
+         * CI-specific private configuration (converted from TypeScript)
+         */
+        
         export const privateEnv = {
             // --- Database Configuration ---
             DB_TYPE: 'mongodb',
@@ -179,45 +190,13 @@ jobs:
         };
         EOF
         
-        # Create config/types.ci.js to replace the types import
-        cat > config/types.ci.js << 'EOF'
-        // CI-specific types that provide the same interface without TypeScript complexity
-        export const createPublicConfig = (config) => config;
-        export const createPrivateConfig = (config) => config;
-        
-        // Basic validation schemas for CI
-        export const publicConfigSchema = {
-            validate: () => ({ success: true }),
-            parse: (data) => data
-        };
-        
-        export const privateConfigSchema = {
-            validate: () => ({ success: true }),
-            parse: (data) => data
-        };
-        
-        export const validateConfig = (schema, config, name) => {
-            console.log(`✅ Validating ${name}...`);
-            return true;
-        };
-        EOF
-        
-        # Backup original config files and replace with CI versions
-        cp config/public.ts config/public.ts.backup
-        cp config/private.ts config/private.ts.backup
-        cp config/types.ts config/types.ts.backup
-        
-        # Replace the files with CI versions
-        cp config/public.ci.js config/public.ts
-        cp config/private.ci.js config/private.ts
-        cp config/types.ci.js config/types.ts
-        
-        # Remove the .ci.js files
-        rm config/public.ci.js config/private.ci.js config/types.ci.js
-        
-        echo "✅ CI config files created successfully"
+        echo "✅ Config files converted to JavaScript successfully"
         echo "📁 Config directory contents:"
         ls -la config/
+        echo "📄 Public config content:"
+        head -20 config/public.ts
+        echo "📄 Private config content:"
+        head -20 config/private.ts
 
     - name: Build application with CI config
       run: |
@@ -278,9 +257,6 @@ jobs:
         fi
         if [ -f config/private.ts.backup ]; then
           mv config/private.ts.backup config/private.ts
-        fi
-        if [ -f config/types.ts.backup ]; then
-          mv config/types.ts.backup config/types.ts
         fi
 
     - name: Upload Playwright test results
