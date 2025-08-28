@@ -192,7 +192,7 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Start MongoDB
+      - name: Start MongoDB # CORRECTED: Added MongoDB service to this job
         uses: supercharge/mongodb-github-action@1.10.0
         with:
           mongodb-version: latest
@@ -204,23 +204,12 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      # --- CORRECTED STEP ---
-      - name: Run local server for Bun tests
-        run: bun run build && bun run preview &
-      # The `&` at the end runs the command in the background, allowing the next steps to execute.
-      # You should also add a step to wait for the server to be ready, just like your Playwright job.
-
-      - name: Wait for server to be ready
-        run: |
-          timeout 30s bash -c 'until curl -f http://localhost:5173 >/dev/null 2>&1; do echo "Waiting for server..."; sleep 3; done'
-
       - name: Run Bun tests
         run: |
           mkdir -p test-results/bun
           bun test tests/bun/api/api-endpoints.test.ts > test-results/bun/test-results.txt
         env: # CORRECTED: Added the full environment configuration to this job as well.
           # --- Private Configuration ---
-          API_BASE_URL: 'http://localhost:5173'
           DB_TYPE: 'mongodb'
           DB_HOST: 'localhost'
           DB_PORT: '27017'
