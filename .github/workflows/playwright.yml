@@ -190,18 +190,16 @@ jobs:
         };
         EOF
         
-        # Remove the original .ts files and rename .js files to replace them
+        # Remove the original .ts files and keep the .js files
         rm config/public.ts config/private.ts
-        mv config/public.js config/public.ts
-        mv config/private.js config/private.ts
         
         echo "✅ Config files converted to JavaScript successfully"
         echo "📁 Config directory contents:"
         ls -la config/
         echo "📄 Public config content:"
-        head -20 config/public.ts
+        head -20 config/public.js
         echo "📄 Private config content:"
-        head -20 config/private.ts
+        head -20 config/private.js
 
     - name: Build application with CI config
       run: |
@@ -263,6 +261,7 @@ jobs:
         if [ -f config/private.ts.backup ]; then
           mv config/private.ts.backup config/private.ts
         fi
+        echo "✅ Original TypeScript config files restored"
 
     - name: Upload Playwright test results
       if: matrix.test
