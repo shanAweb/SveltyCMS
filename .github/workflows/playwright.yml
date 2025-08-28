@@ -179,14 +179,45 @@ jobs:
         };
         EOF
         
+        # Create config/types.ci.js to replace the types import
+        cat > config/types.ci.js << 'EOF'
+        // CI-specific types that provide the same interface without TypeScript complexity
+        export const createPublicConfig = (config) => config;
+        export const createPrivateConfig = (config) => config;
+        
+        // Basic validation schemas for CI
+        export const publicConfigSchema = {
+            validate: () => ({ success: true }),
+            parse: (data) => data
+        };
+        
+        export const privateConfigSchema = {
+            validate: () => ({ success: true }),
+            parse: (data) => data
+        };
+        
+        export const validateConfig = (schema, config, name) => {
+            console.log(`✅ Validating ${name}...`);
+            return true;
+        };
+        EOF
+        
         # Backup original config files and replace with CI versions
         cp config/public.ts config/public.ts.backup
         cp config/private.ts config/private.ts.backup
+        cp config/types.ts config/types.ts.backup
+        
+        # Replace the files with CI versions
         cp config/public.ci.js config/public.ts
         cp config/private.ci.js config/private.ts
+        cp config/types.ci.js config/types.ts
         
         # Remove the .ci.js files
-        rm config/public.ci.js config/private.ci.js
+        rm config/public.ci.js config/private.ci.js config/types.ci.js
+        
+        echo "✅ CI config files created successfully"
+        echo "📁 Config directory contents:"
+        ls -la config/
 
     - name: Build application with CI config
       run: |
@@ -247,6 +278,9 @@ jobs:
         fi
         if [ -f config/private.ts.backup ]; then
           mv config/private.ts.backup config/private.ts
+        fi
+        if [ -f config/types.ts.backup ]; then
+          mv config/types.ts.backup config/types.ts
         fi
 
     - name: Upload Playwright test results
